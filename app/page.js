@@ -1,6 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ProjectSwitcher from "./components/ProjectSwitcher";
+import WorkingFolderInput from "./components/WorkingFolderInput";
+import {
+  SEED_NODES,
+  SEED_EDGES,
+  loadStore,
+  writeStore,
+  makeProject,
+  seedCanvas,
+  getActiveProject,
+  withProjectUpdated,
+  withCanvasUpdated,
+} from "./lib/projects";
 
 const ROLE_COLORS = {
   agent: { soft: "var(--accent-soft)", border: "var(--accent)" },
@@ -11,73 +24,7 @@ const ROLE_COLORS = {
   memory: { soft: "var(--memory-soft)", border: "var(--memory)" },
 };
 
-const SEED_NODES = [
-  {
-    id: "intake",
-    role: "agent",
-    title: "Intake",
-    description: "Normalize the user goal and identify missing inputs before routing.",
-    instructions: "",
-    x: 120,
-    y: 200,
-    w: 220,
-    h: 130,
-  },
-  {
-    id: "policy",
-    role: "guardrail",
-    title: "Policy gate",
-    description: "Classify read, write, network, shell, and credential intent against permissions.",
-    instructions: "",
-    x: 400,
-    y: 200,
-    w: 220,
-    h: 130,
-  },
-  {
-    id: "orch",
-    role: "orchestrator",
-    title: "Orchestrator",
-    description: "Choose the next action from the active tool pool.",
-    instructions: "",
-    x: 680,
-    y: 200,
-    w: 220,
-    h: 130,
-  },
-  {
-    id: "exec",
-    role: "executor",
-    title: "Executor",
-    description: "Run approved reads or writes and return structured results.",
-    instructions: "",
-    x: 680,
-    y: 380,
-    w: 220,
-    h: 130,
-  },
-  {
-    id: "evalCheck",
-    role: "eval",
-    title: "Eval check",
-    description: "Check output, permissions, and guardrail invariants.",
-    instructions: "",
-    x: 960,
-    y: 290,
-    w: 220,
-    h: 130,
-  },
-];
-
 const ROLE_OPTIONS = ["agent", "guardrail", "orchestrator", "executor", "eval", "memory"];
-
-const SEED_EDGES = [
-  { id: "intake->policy", from: "intake", to: "policy" },
-  { id: "policy->orch", from: "policy", to: "orch" },
-  { id: "orch->exec", from: "orch", to: "exec" },
-  { id: "exec->evalCheck", from: "exec", to: "evalCheck" },
-  { id: "orch->evalCheck", from: "orch", to: "evalCheck" },
-];
 
 function edgeId(from, to) {
   return `${from}->${to}`;
@@ -86,55 +33,23 @@ function edgeId(from, to) {
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 2.5;
 
-// Persistence: bump STORAGE_VERSION (and the key suffix) when the persisted shape changes.
-const STORAGE_KEY = "agent-studio:v1";
-const STORAGE_VERSION = 1;
 const PERSIST_DEBOUNCE_MS = 350;
 
-function readPersistedState() {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || parsed.version !== STORAGE_VERSION) return null;
-    const { nodes, edges, pan, zoom } = parsed;
-    if (!Array.isArray(nodes) || !Array.isArray(edges)) return null;
-    if (!pan || typeof pan.x !== "number" || typeof pan.y !== "number") return null;
-    if (typeof zoom !== "number" || !Number.isFinite(zoom)) return null;
-    return { nodes, edges, pan, zoom };
-  } catch (err) {
-    console.warn("[agent-studio] failed to read persisted state, falling back to seeds:", err);
-    return null;
-  }
-}
-
-function writePersistedState(payload) {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ version: STORAGE_VERSION, ...payload }),
-    );
-  } catch (err) {
-    console.warn("[agent-studio] failed to persist state:", err);
-  }
-}
-
-function clearPersistedState() {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } catch (err) {
-    console.warn("[agent-studio] failed to clear persisted state:", err);
-  }
-}
-
 export default function StudioCanvas() {
+  // Store is the source of truth for projects + active project. Canvas state
+  // (nodes/edges/pan/zoom) is held in separate React state for fast updates;
+  // a debounced effect mirrors it back into the active project on the store
+  // before persisting.
+  const [store, setStore] = useState(() => ({
+    version: 2,
+    activeProjectId: "bootstrap",
+    projects: [{ ...makeProject({ name: "Default" }), id: "bootstrap" }],
+  }));
   const [nodes, setNodes] = useState(SEED_NODES);
   const [edges, setEdges] = useState(SEED_EDGES);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
+
   const [expandedId, setExpandedId] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState(null);
@@ -149,6 +64,10 @@ export default function StudioCanvas() {
   // so we never overwrite saved state with seed state on first paint.
   const hasHydratedRef = useRef(false);
   const persistTimerRef = useRef(null);
+  // When we deliberately swap canvas state (project switch, new project, delete),
+  // we don't want the canvas-state effect below to immediately mirror back into
+  // the old/just-cleared project. This ref short-circuits the next mirror.
+  const skipNextMirrorRef = useRef(false);
 
   const screenToCanvas = useCallback(
     (sx, sy) => {
@@ -410,20 +329,33 @@ export default function StudioCanvas() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selectedEdgeId, selectedId, connect]);
 
-  // Hydrate from localStorage on mount. We accept one frame of seed state (the initial useState
-  // values) before swapping to persisted state — simpler and SSR-safe.
+  // Hydrate from localStorage on mount. Either pulls v2, migrates from v1, or
+  // seeds a fresh Default project.
   useEffect(() => {
-    const persisted = readPersistedState();
-    if (persisted) {
-      // Defensive default: older saves predate the `instructions` field.
-      // Fill the field as empty so panel inputs are always controlled.
-      const hydratedNodes = persisted.nodes.map((n) =>
-        typeof n.instructions === "string" ? n : { ...n, instructions: "" },
-      );
-      setNodes(hydratedNodes);
-      setEdges(persisted.edges);
-      setPan(persisted.pan);
-      setZoom(persisted.zoom);
+    const loaded = loadStore();
+    if (loaded) {
+      const active = getActiveProject(loaded);
+      if (active) {
+        // Skip the next mirror cycle because we're about to set canvas state to
+        // exactly what's already in the store — nothing to write back.
+        skipNextMirrorRef.current = true;
+        setStore(loaded);
+        setNodes(active.canvas.nodes);
+        setEdges(active.canvas.edges);
+        setPan(active.canvas.pan);
+        setZoom(active.canvas.zoom);
+      }
+    } else {
+      // Fresh install: build a Default project from the seed canvas and persist it.
+      const fresh = makeProject({ name: "Default" });
+      const initial = { version: 2, activeProjectId: fresh.id, projects: [fresh] };
+      skipNextMirrorRef.current = true;
+      setStore(initial);
+      setNodes(fresh.canvas.nodes);
+      setEdges(fresh.canvas.edges);
+      setPan(fresh.canvas.pan);
+      setZoom(fresh.canvas.zoom);
+      writeStore(initial);
     }
     hasHydratedRef.current = true;
     return () => {
@@ -434,36 +366,167 @@ export default function StudioCanvas() {
     };
   }, []);
 
-  // Debounced auto-save. Skipped until hydration completes so we don't clobber persisted state
-  // with seeds on first render. Transient UI state (selection, hover, expand, connect ghost) is
-  // intentionally excluded.
+  // Debounced auto-save. Mirrors local canvas state into the active project on
+  // the store, then persists. Skipped until hydration completes (to avoid
+  // clobbering load) and once whenever we just swapped projects (to avoid
+  // writing the new canvas onto the project we just left).
   useEffect(() => {
     if (!hasHydratedRef.current) return;
+    if (skipNextMirrorRef.current) {
+      skipNextMirrorRef.current = false;
+      return;
+    }
     if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     persistTimerRef.current = setTimeout(() => {
-      writePersistedState({ nodes, edges, pan, zoom });
+      setStore((prev) => {
+        const next = withCanvasUpdated(prev, prev.activeProjectId, { nodes, edges, pan, zoom });
+        writeStore(next);
+        return next;
+      });
       persistTimerRef.current = null;
     }, PERSIST_DEBOUNCE_MS);
   }, [nodes, edges, pan, zoom]);
 
   function clearAll() {
-    if (typeof window !== "undefined" && !window.confirm("Clear the canvas and reset to the seed graph? This will erase saved changes.")) {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Reset this project's canvas to the seed graph? This will erase saved changes for this project.")
+    ) {
       return;
     }
     if (persistTimerRef.current) {
       clearTimeout(persistTimerRef.current);
       persistTimerRef.current = null;
     }
-    clearPersistedState();
-    setNodes(SEED_NODES);
-    setEdges(SEED_EDGES);
-    setPan({ x: 0, y: 0 });
-    setZoom(1);
+    const seeded = seedCanvas();
+    setStore((prev) => {
+      const next = withCanvasUpdated(prev, prev.activeProjectId, seeded);
+      writeStore(next);
+      return next;
+    });
+    skipNextMirrorRef.current = true;
+    setNodes(seeded.nodes);
+    setEdges(seeded.edges);
+    setPan(seeded.pan);
+    setZoom(seeded.zoom);
     setSelectedId(null);
     setSelectedEdgeId(null);
     setExpandedId(null);
     setHoveredNodeId(null);
     setConnect(null);
+  }
+
+  // Project actions wired into the switcher.
+  function handleSelectProject(projectId) {
+    if (projectId === store.activeProjectId) return;
+    // Flush any pending mirror so the project we're leaving keeps its current state.
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    setStore((prev) => {
+      const flushed = withCanvasUpdated(prev, prev.activeProjectId, { nodes, edges, pan, zoom });
+      const next = { ...flushed, activeProjectId: projectId };
+      writeStore(next);
+      const target = next.projects.find((p) => p.id === projectId);
+      if (target) {
+        skipNextMirrorRef.current = true;
+        // Defer canvas state swap to avoid mid-render setState; it's fine to
+        // queue these because skipNextMirrorRef is consulted on the *next* run
+        // of the mirror effect.
+        queueMicrotask(() => {
+          setNodes(target.canvas.nodes);
+          setEdges(target.canvas.edges);
+          setPan(target.canvas.pan);
+          setZoom(target.canvas.zoom);
+          setSelectedId(null);
+          setSelectedEdgeId(null);
+          setExpandedId(null);
+          setHoveredNodeId(null);
+          setConnect(null);
+        });
+      }
+      return next;
+    });
+  }
+
+  function handleNewProject(name) {
+    const project = makeProject({ name });
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    setStore((prev) => {
+      // Flush pending edits to the *current* project before swapping.
+      const flushed = withCanvasUpdated(prev, prev.activeProjectId, { nodes, edges, pan, zoom });
+      const next = {
+        ...flushed,
+        activeProjectId: project.id,
+        projects: [...flushed.projects, project],
+      };
+      writeStore(next);
+      skipNextMirrorRef.current = true;
+      queueMicrotask(() => {
+        setNodes(project.canvas.nodes);
+        setEdges(project.canvas.edges);
+        setPan(project.canvas.pan);
+        setZoom(project.canvas.zoom);
+        setSelectedId(null);
+        setSelectedEdgeId(null);
+        setExpandedId(null);
+        setHoveredNodeId(null);
+        setConnect(null);
+      });
+      return next;
+    });
+  }
+
+  function handleRenameProject(projectId, name) {
+    setStore((prev) => {
+      const next = withProjectUpdated(prev, projectId, (p) => ({ ...p, name }));
+      writeStore(next);
+      return next;
+    });
+  }
+
+  function handleDeleteProject(projectId) {
+    setStore((prev) => {
+      if (prev.projects.length <= 1) return prev; // last-project guard, also enforced in UI
+      const remaining = prev.projects.filter((p) => p.id !== projectId);
+      const wasActive = prev.activeProjectId === projectId;
+      const nextActiveId = wasActive ? remaining[0].id : prev.activeProjectId;
+      const next = { ...prev, projects: remaining, activeProjectId: nextActiveId };
+      writeStore(next);
+      if (wasActive) {
+        const target = next.projects.find((p) => p.id === nextActiveId);
+        if (target) {
+          skipNextMirrorRef.current = true;
+          queueMicrotask(() => {
+            setNodes(target.canvas.nodes);
+            setEdges(target.canvas.edges);
+            setPan(target.canvas.pan);
+            setZoom(target.canvas.zoom);
+            setSelectedId(null);
+            setSelectedEdgeId(null);
+            setExpandedId(null);
+            setHoveredNodeId(null);
+            setConnect(null);
+          });
+        }
+      }
+      return next;
+    });
+  }
+
+  function handleWorkingFolderChange(value) {
+    setStore((prev) => {
+      const next = withProjectUpdated(prev, prev.activeProjectId, (p) => ({
+        ...p,
+        workingFolder: value,
+      }));
+      writeStore(next);
+      return next;
+    });
   }
 
   function selectEdge(e, edge) {
@@ -501,6 +564,8 @@ export default function StudioCanvas() {
     [nodes, selectedId],
   );
 
+  const activeProject = useMemo(() => getActiveProject(store), [store]);
+
   // Ghost edge during a connection drag.
   const ghostPath = useMemo(() => {
     if (!connect) return null;
@@ -514,6 +579,9 @@ export default function StudioCanvas() {
     return `M ${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}`;
   }, [connect, nodes]);
 
+  // The side panel is open whenever there's an active project (always true
+  // post-hydration). Pass 4 makes it project-info-first; node properties live
+  // inside it when a node is selected.
   return (
     <div className="studio-shell">
       <header className="studio-toolbar">
@@ -523,6 +591,15 @@ export default function StudioCanvas() {
         </div>
 
         <div className="studio-tools">
+          <ProjectSwitcher
+            projects={store.projects}
+            activeProjectId={store.activeProjectId}
+            onSelect={handleSelectProject}
+            onNew={handleNewProject}
+            onRename={handleRenameProject}
+            onDelete={handleDeleteProject}
+          />
+          <span className="tool-sep" />
           <button className="tool-btn" onClick={addNode} title="Add node">
             + node
           </button>
@@ -552,7 +629,7 @@ export default function StudioCanvas() {
           <button
             className="tool-btn"
             onClick={clearAll}
-            title="Clear saved state and reset to seed graph"
+            title="Clear this project's canvas and reset to seed graph"
           >
             clear
           </button>
@@ -703,71 +780,89 @@ export default function StudioCanvas() {
         </div>
       </div>
 
-      {selectedNode && (
-        <aside className="studio-panel" aria-label="Node properties">
+      {activeProject && (
+        <aside className="studio-panel" aria-label="Project and node properties">
           <div className="panel-header">
-            <span className="studio-eyebrow">Node</span>
-            <span className="panel-id" title="Node id">{selectedNode.id}</span>
+            <span className="studio-eyebrow">Project</span>
+            <span className="panel-id" title="Project id">{activeProject.id}</span>
           </div>
 
           <div className="panel-body">
-            <label className="panel-field">
-              <span className="panel-label">Title</span>
-              <input
-                className="panel-input"
-                type="text"
-                value={selectedNode.title}
-                placeholder="Untitled node"
-                onChange={(e) => updateNodeField(selectedNode.id, "title", e.target.value)}
-              />
-            </label>
+            <WorkingFolderInput
+              value={activeProject.workingFolder}
+              onChange={handleWorkingFolderChange}
+            />
 
-            <label className="panel-field">
-              <span className="panel-label">Description</span>
-              <textarea
-                className="panel-input panel-textarea"
-                rows={3}
-                value={selectedNode.description}
-                onChange={(e) => updateNodeField(selectedNode.id, "description", e.target.value)}
-              />
-            </label>
+            {selectedNode ? (
+              <>
+                <div className="panel-divider" />
+                <div className="panel-subheader">
+                  <span className="studio-eyebrow">Node</span>
+                  <span className="panel-id" title="Node id">{selectedNode.id}</span>
+                </div>
+                <label className="panel-field">
+                  <span className="panel-label">Title</span>
+                  <input
+                    className="panel-input"
+                    type="text"
+                    value={selectedNode.title}
+                    placeholder="Untitled node"
+                    onChange={(e) => updateNodeField(selectedNode.id, "title", e.target.value)}
+                  />
+                </label>
 
-            <label className="panel-field">
-              <span className="panel-label">Role</span>
-              <select
-                className="panel-input panel-select"
-                value={selectedNode.role}
-                onChange={(e) => updateNodeField(selectedNode.id, "role", e.target.value)}
+                <label className="panel-field">
+                  <span className="panel-label">Description</span>
+                  <textarea
+                    className="panel-input panel-textarea"
+                    rows={3}
+                    value={selectedNode.description}
+                    onChange={(e) => updateNodeField(selectedNode.id, "description", e.target.value)}
+                  />
+                </label>
+
+                <label className="panel-field">
+                  <span className="panel-label">Role</span>
+                  <select
+                    className="panel-input panel-select"
+                    value={selectedNode.role}
+                    onChange={(e) => updateNodeField(selectedNode.id, "role", e.target.value)}
+                  >
+                    {ROLE_OPTIONS.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="panel-field">
+                  <span className="panel-label">Instructions</span>
+                  <textarea
+                    className="panel-input panel-textarea panel-textarea-tall"
+                    rows={8}
+                    value={selectedNode.instructions ?? ""}
+                    placeholder="What should this node do? (system prompt, policy, etc.)"
+                    onChange={(e) => updateNodeField(selectedNode.id, "instructions", e.target.value)}
+                  />
+                </label>
+              </>
+            ) : (
+              <p className="panel-empty">Select a node to edit its title, role, and instructions.</p>
+            )}
+          </div>
+
+          {selectedNode && (
+            <div className="panel-footer">
+              <button
+                className="tool-btn panel-delete"
+                onClick={deleteSelected}
+                title="Delete this node and any connected edges"
               >
-                {ROLE_OPTIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="panel-field">
-              <span className="panel-label">Instructions</span>
-              <textarea
-                className="panel-input panel-textarea panel-textarea-tall"
-                rows={8}
-                value={selectedNode.instructions ?? ""}
-                placeholder="What should this node do? (system prompt, policy, etc.)"
-                onChange={(e) => updateNodeField(selectedNode.id, "instructions", e.target.value)}
-              />
-            </label>
-          </div>
-
-          <div className="panel-footer">
-            <button
-              className="tool-btn panel-delete"
-              onClick={deleteSelected}
-              title="Delete this node and any connected edges"
-            >
-              delete node
-            </button>
-          </div>
+                delete node
+              </button>
+            </div>
+          )}
         </aside>
       )}
       </div>
@@ -818,6 +913,7 @@ export default function StudioCanvas() {
           font-size: 13px;
           color: var(--ink);
           cursor: pointer;
+          font-family: inherit;
         }
         .tool-btn:hover:not(:disabled) {
           border-color: var(--accent);
@@ -966,12 +1062,23 @@ export default function StudioCanvas() {
           overflow-y: auto;
           z-index: 1;
         }
-        .panel-header {
+        .panel-header,
+        .panel-subheader {
           display: flex;
           align-items: baseline;
           justify-content: space-between;
           padding: 14px 18px 10px;
+        }
+        .panel-header {
           border-bottom: 1px solid var(--border);
+        }
+        .panel-subheader {
+          padding: 4px 0 6px;
+        }
+        .panel-divider {
+          height: 1px;
+          background: var(--border);
+          margin: 8px 0 0;
         }
         .panel-id {
           font-family: ui-monospace, "SF Mono", Menlo, monospace;
@@ -984,6 +1091,11 @@ export default function StudioCanvas() {
           flex-direction: column;
           gap: 12px;
           flex: 1;
+        }
+        .panel-empty {
+          font-size: 12px;
+          color: var(--muted);
+          margin: 4px 0 0;
         }
         .panel-field {
           display: flex;

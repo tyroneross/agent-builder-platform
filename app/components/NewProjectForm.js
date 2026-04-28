@@ -27,11 +27,19 @@ import { canvasFromPattern } from "../lib/agent-patterns";
 // (looksAbsolutePath + permitted prefix) and rely on the server's authoritative
 // answer when the user actually uploads a file. A later refactor could have
 // WorkingFolderInput report status upward; for now keep it self-contained.
-export default function NewProjectForm({ onCreate, onCancel, seedPattern }) {
+export default function NewProjectForm({
+  onCreate,
+  onCancel,
+  seedPattern,
+  // Pass 12: optional callback to swap back to the conversational setup.
+  // Parent passes the current goal text along when toggling.
+  onSwitchToConversation,
+  initialGoal = "",
+}) {
   const [name, setName] = useState(seedPattern?.name || "");
   const [workingFolder, setWorkingFolder] = useState("");
   const [folderValidated, setFolderValidated] = useState(false);
-  const [goal, setGoal] = useState("");
+  const [goal, setGoal] = useState(initialGoal || "");
   const [context, setContext] = useState("");
   const [outcome, setOutcome] = useState("");
   const [uploads, setUploads] = useState([]);
@@ -296,6 +304,19 @@ export default function NewProjectForm({ onCreate, onCancel, seedPattern }) {
         <span className="np-blocked">{submitBlockedReason || "ready"}</span>
       </div>
 
+      {onSwitchToConversation && (
+        <div className="np-footer" data-new-project-footer>
+          <button
+            type="button"
+            className="np-footer-link"
+            onClick={() => onSwitchToConversation({ goal })}
+            data-new-project-switch-conversation
+          >
+            Use the conversation instead
+          </button>
+        </div>
+      )}
+
       <style jsx>{`
         .np-form {
           display: flex;
@@ -425,6 +446,25 @@ export default function NewProjectForm({ onCreate, onCancel, seedPattern }) {
           font-size: 12px;
           color: var(--muted);
           line-height: 1.4;
+        }
+        .np-footer {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: -8px;
+        }
+        .np-footer-link {
+          background: transparent;
+          border: 0;
+          font-family: inherit;
+          font-size: 12px;
+          color: var(--muted);
+          cursor: pointer;
+          padding: 6px 4px;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+        .np-footer-link:hover {
+          color: var(--ink);
         }
       `}</style>
     </form>

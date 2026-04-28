@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ProjectsList from "./components/ProjectsList";
 import NewProjectForm from "./components/NewProjectForm";
+import SetupConversation from "./components/SetupConversation";
 import HowItWorks from "./components/HowItWorks";
 import PatternPicker from "./components/PatternPicker";
 import OnboardingWizard, { ONBOARDING_FLAG_KEY } from "./components/OnboardingWizard";
@@ -31,7 +32,6 @@ import {
 export default function Landing() {
   const router = useRouter();
   const [store, setStore] = useState(null);
-  const [showForm, setShowForm] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
   const [demoError, setDemoError] = useState(null);
 
@@ -44,6 +44,19 @@ export default function Landing() {
   //   carries the canvas through to project creation.
   const [showWizard, setShowWizard] = useState(false);
   const [seedPattern, setSeedPattern] = useState(null);
+
+  // Pass 12: conversational setup is the default new-project path.
+  //   - newProjectMode: "conversation" (default) | "manual"
+  //   - newProjectActive: whether the user has chosen to start a new project.
+  //     For empty state we just render SetupConversation inline. For the
+  //     hasProjects=true header CTA, we toggle this on/off.
+  // The seven-field NewProjectForm is gated behind manual mode (escape hatch).
+  // `goalCarry` carries the typed goal across mode toggles so the user
+  // doesn't have to retype if they bounce between conversation and form.
+  const [newProjectMode, setNewProjectMode] = useState("conversation");
+  const [newProjectActive, setNewProjectActive] = useState(false);
+  const [goalCarry, setGoalCarry] = useState("");
+  const [goalPlaceholder, setGoalPlaceholder] = useState(null);
 
   // Pass 8: Ollama prereq state. "unknown" while loading, "ok" if >=1 model,
   // "warn" if reachable but empty, "err" if unreachable. The empty state on
@@ -96,24 +109,61 @@ export default function Landing() {
     setShowWizard(false);
   }
 
+  // Pass 12: pattern click no longer opens the manual form. Instead it
+  // biases the SetupConversation by setting `seedPattern` (used as
+  // preferredPattern) and pre-fills a placeholder hint for the goal box.
   function handlePickPattern(pattern) {
     setSeedPattern(pattern);
-    setShowForm(true);
+    setNewProjectMode("conversation");
+    setGoalPlaceholder(`e.g. ${pattern.shortDescription}`);
+    setNewProjectActive(true);
+    // Defer scroll to next tick so the section is mounted.
+    if (typeof window !== "undefined") {
+      setTimeout(() => {
+        const el = document.querySelector("[data-landing-new-section]");
+        if (el && typeof el.scrollIntoView === "function") {
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 0);
+    }
   }
 
   function handleWizardBlank() {
+    // "Create a blank project" from the wizard now lands on the conversation
+    // with no preferred pattern. The user can still escape to the form.
     setSeedPattern(null);
-    setShowForm(true);
+    setNewProjectMode("conversation");
+    setGoalPlaceholder(null);
+    setNewProjectActive(true);
   }
 
   function handleWizardExplore() {
     setSeedPattern(null);
-    setShowForm(false);
+    setNewProjectActive(false);
   }
 
   function handleReopenWizard() {
     setSeedPattern(null);
     setShowWizard(true);
+  }
+
+  function handleSwitchToManual({ goal } = {}) {
+    if (typeof goal === "string") setGoalCarry(goal);
+    setNewProjectMode("manual");
+  }
+
+  function handleSwitchToConversation({ goal } = {}) {
+    if (typeof goal === "string") setGoalCarry(goal);
+    setNewProjectMode("conversation");
+  }
+
+  function handleCloseNewProject() {
+    setNewProjectActive(false);
+    setSeedPattern(null);
+    setGoalPlaceholder(null);
+    setGoalCarry("");
+    // Reset to conversation as the default for next time.
+    setNewProjectMode("conversation");
   }
 
   // Health check: only when no projects exist. We don't need to spam the
@@ -187,6 +237,10 @@ export default function Landing() {
       : { ...emptyStore(), projects: [project], activeProjectId: project.id };
     persist(next);
     setSeedPattern(null);
+    setNewProjectActive(false);
+    setNewProjectMode("conversation");
+    setGoalCarry("");
+    setGoalPlaceholder(null);
     router.push("/canvas");
   }
 
@@ -284,16 +338,23 @@ export default function Landing() {
           <button
             type="button"
             className="tool-btn land-cta"
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => {
+              if (newProjectActive) {
+                handleCloseNewProject();
+              } else {
+                setNewProjectActive(true);
+                setNewProjectMode("conversation");
+              }
+            }}
             data-landing-new-project
           >
-            {showForm ? "close" : "+ new project"}
+            {newProjectActive ? "close" : "+ new project"}
           </button>
         )}
       </header>
 
       <main className="land-main">
-        {!hasProjects && !showForm && (
+        {!hasProjects && (
           <section className="land-card" data-landing-empty>
             <HowItWorks />
 
@@ -306,14 +367,6 @@ export default function Landing() {
                 data-landing-try-demo
               >
                 {demoBusy ? "Preparing demo…" : "Try the demo project"}
-              </button>
-              <button
-                type="button"
-                className="cta cta-secondary"
-                onClick={() => setShowForm(true)}
-                data-landing-create-blank
-              >
-                Create blank project
               </button>
             </div>
 
@@ -355,32 +408,56 @@ export default function Landing() {
           </section>
         )}
 
-        {showForm && (
-          <section className="land-card" data-landing-form>
-            <div className="land-card-header">
-              <span className="land-eyebrow">New project</span>
-            </div>
-            <NewProjectForm
-              onCreate={handleCreate}
-              onCancel={() => {
-                setShowForm(false);
-                setSeedPattern(null);
-              }}
-              seedPattern={seedPattern}
-            />
-          </section>
-        )}
-
-        {!showForm && (
+        {/* Pass 12: pattern picker stays visible above the conversational
+            entry. Clicking a card biases the conversation's preferredPattern
+            and pre-fills a placeholder. */}
+        {(!hasProjects || newProjectActive) && (
           <section className="land-card" data-landing-pattern-section>
             <div className="land-card-header">
               <span className="land-eyebrow">Start from a pattern</span>
               <p className="land-card-sub">
-                Bootstrap a project from one of four canonical agent shapes. The pattern
-                pre-fills the canvas; you still set a working folder.
+                Optional. Pick one of four canonical agent shapes to bias the suggestion.
               </p>
             </div>
             <PatternPicker onSelect={handlePickPattern} />
+          </section>
+        )}
+
+        {/* Pass 12: conversational setup is the default new-project entry.
+            Always shown for empty state; toggled by the header CTA when the
+            user has projects. The seven-field form is behind a manual escape
+            hatch. */}
+        {(!hasProjects || newProjectActive) && (
+          <section
+            className="land-card"
+            data-landing-new-section
+            data-new-project-mode={newProjectMode}
+          >
+            <div className="land-card-header">
+              <span className="land-eyebrow">New project</span>
+              {seedPattern && (
+                <span className="land-card-sub" data-landing-seed-pattern>
+                  Pattern hint: <strong>{seedPattern.name}</strong>
+                </span>
+              )}
+            </div>
+            {newProjectMode === "conversation" ? (
+              <SetupConversation
+                onCreate={handleCreate}
+                onSwitchToManual={handleSwitchToManual}
+                preferredPattern={seedPattern?.id || null}
+                initialGoal={goalCarry}
+                initialGoalPlaceholder={goalPlaceholder}
+              />
+            ) : (
+              <NewProjectForm
+                onCreate={handleCreate}
+                onCancel={handleCloseNewProject}
+                onSwitchToConversation={handleSwitchToConversation}
+                seedPattern={seedPattern}
+                initialGoal={goalCarry}
+              />
+            )}
           </section>
         )}
 

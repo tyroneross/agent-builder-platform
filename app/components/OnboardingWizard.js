@@ -149,9 +149,9 @@ export default function OnboardingWizard({
                   }}
                   data-onboarding-choose-blank
                 >
-                  <span className="ow-opt-title">Create a blank project</span>
+                  <span className="ow-opt-title">Describe what you need</span>
                   <span className="ow-opt-desc">
-                    Start with the empty new-project form and build from scratch.
+                    Type your goal and let the local model suggest the rest.
                   </span>
                 </button>
               </li>
@@ -201,8 +201,8 @@ export default function OnboardingWizard({
               Pick a pattern
             </h2>
             <p className="ow-body">
-              Click a card to pre-fill the new-project form with that pattern&apos;s nodes
-              and edges. You&apos;ll still set a name and a working folder.
+              Click a card to bias the conversational setup with that pattern. You can
+              describe your goal next, and the local model will suggest the rest.
             </p>
 
             <PatternPicker onSelect={handlePatternClick} />

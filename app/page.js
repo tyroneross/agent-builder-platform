@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import ProjectsList from "./components/ProjectsList";
 import NewProjectForm from "./components/NewProjectForm";
 import HowItWorks from "./components/HowItWorks";
+import PatternPicker from "./components/PatternPicker";
+import OnboardingWizard, { ONBOARDING_FLAG_KEY } from "./components/OnboardingWizard";
 import {
   emptyStore,
   getActiveProject,
@@ -33,6 +35,16 @@ export default function Landing() {
   const [demoBusy, setDemoBusy] = useState(false);
   const [demoError, setDemoError] = useState(null);
 
+  // Pass 9: onboarding wizard + pattern picker.
+  // - showWizard: whether the modal is currently visible. Triggered on first
+  //   visit (no localStorage flag) when the user has no projects, or when the
+  //   user clicks the "Show onboarding" link.
+  // - seedPattern: the pattern selected from either the wizard or the
+  //   landing-page picker. Passed into NewProjectForm so it pre-fills name +
+  //   carries the canvas through to project creation.
+  const [showWizard, setShowWizard] = useState(false);
+  const [seedPattern, setSeedPattern] = useState(null);
+
   // Pass 8: Ollama prereq state. "unknown" while loading, "ok" if >=1 model,
   // "warn" if reachable but empty, "err" if unreachable. The empty state on
   // the landing page renders a compact pill driven by this.
@@ -48,6 +60,61 @@ export default function Landing() {
       writeStore(fresh);
     }
   }, []);
+
+  // Pass 9: first-run onboarding gate. We open the wizard only when both
+  // (a) the user has no projects and (b) they haven't completed onboarding.
+  // The flag is per-browser (localStorage), not per-project. The wizard uses
+  // the same store-loaded effect timing as the rest of the page so it doesn't
+  // flash before hydration.
+  useEffect(() => {
+    if (!store) return;
+    if (store.projects.length > 0) return;
+    if (typeof window === "undefined") return;
+    let done = false;
+    try {
+      done = window.localStorage.getItem(ONBOARDING_FLAG_KEY) === "1";
+    } catch {
+      done = false;
+    }
+    if (!done) setShowWizard(true);
+  }, [store]);
+
+  function persistOnboardingComplete() {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(ONBOARDING_FLAG_KEY, "1");
+    } catch {}
+  }
+
+  function handleWizardClose() {
+    persistOnboardingComplete();
+    setShowWizard(false);
+  }
+
+  function handleWizardComplete() {
+    persistOnboardingComplete();
+    setShowWizard(false);
+  }
+
+  function handlePickPattern(pattern) {
+    setSeedPattern(pattern);
+    setShowForm(true);
+  }
+
+  function handleWizardBlank() {
+    setSeedPattern(null);
+    setShowForm(true);
+  }
+
+  function handleWizardExplore() {
+    setSeedPattern(null);
+    setShowForm(false);
+  }
+
+  function handleReopenWizard() {
+    setSeedPattern(null);
+    setShowWizard(true);
+  }
 
   // Health check: only when no projects exist. We don't need to spam the
   // model endpoint on every visit — once the user has projects they'll see
@@ -110,12 +177,16 @@ export default function Landing() {
     persist(next);
   }
 
-  function handleCreate({ name, workingFolder, goal, context, outcome, uploads }) {
-    const project = makeProject({ name, workingFolder, goal, context, outcome, uploads });
+  function handleCreate({ name, workingFolder, goal, context, outcome, uploads, canvas }) {
+    // Pass 9: when canvas is supplied (from the seed-pattern flow), forward
+    // it so makeProject uses the pattern's nodes/edges instead of the default
+    // Solo Tool Agent seed.
+    const project = makeProject({ name, workingFolder, goal, context, outcome, uploads, canvas });
     const next = store
       ? { ...store, projects: [...store.projects, project], activeProjectId: project.id }
       : { ...emptyStore(), projects: [project], activeProjectId: project.id };
     persist(next);
+    setSeedPattern(null);
     router.push("/canvas");
   }
 
@@ -189,6 +260,14 @@ export default function Landing() {
 
   return (
     <div className="land">
+      <OnboardingWizard
+        open={showWizard}
+        onComplete={handleWizardComplete}
+        onClose={handleWizardClose}
+        onPickPattern={handlePickPattern}
+        onPickBlank={handleWizardBlank}
+        onExplore={handleWizardExplore}
+      />
       <header className="land-hero">
         <div className="land-hero-text">
           <span className="land-eyebrow">Agent Studio</span>
@@ -288,8 +367,25 @@ export default function Landing() {
             </div>
             <NewProjectForm
               onCreate={handleCreate}
-              onCancel={() => setShowForm(false)}
+              onCancel={() => {
+                setShowForm(false);
+                setSeedPattern(null);
+              }}
+              seedPattern={seedPattern}
             />
+          </section>
+        )}
+
+        {!showForm && (
+          <section className="land-card" data-landing-pattern-section>
+            <div className="land-card-header">
+              <span className="land-eyebrow">Start from a pattern</span>
+              <p className="land-card-sub">
+                Bootstrap a project from one of four canonical agent shapes. The pattern
+                pre-fills the canvas; you still set a working folder.
+              </p>
+            </div>
+            <PatternPicker onSelect={handlePickPattern} />
           </section>
         )}
 
@@ -314,6 +410,17 @@ export default function Landing() {
             />
           </section>
         )}
+
+        <div className="land-footer" data-landing-footer>
+          <button
+            type="button"
+            className="land-footer-link"
+            onClick={handleReopenWizard}
+            data-landing-show-onboarding
+          >
+            Show onboarding
+          </button>
+        </div>
       </main>
 
       <style jsx>{`
@@ -495,6 +602,25 @@ export default function Landing() {
         .tool-btn:disabled {
           color: var(--faint);
           cursor: not-allowed;
+        }
+        .land-footer {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 8px;
+        }
+        .land-footer-link {
+          background: transparent;
+          border: 0;
+          font-family: inherit;
+          font-size: 12px;
+          color: var(--muted);
+          cursor: pointer;
+          padding: 6px 4px;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+        .land-footer-link:hover {
+          color: var(--ink);
         }
       `}</style>
     </div>

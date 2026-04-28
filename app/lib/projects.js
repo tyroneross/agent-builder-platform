@@ -30,6 +30,17 @@
 // (additive: rolePromptOverrides defaults to {} per project). All lazy on
 // first load and persisted to v4 immediately. Old keys are left in place so
 // a user can recover if a migration produced something unexpected.
+//
+// Pass 9: SEED_NODES / SEED_EDGES are now re-exported from agent-patterns.js
+// (the Solo Tool Agent pattern). The pattern library is the single source of
+// truth for canonical agent shapes; this file owns persistence + migrations.
+
+import {
+  PATTERNS,
+  SOLO_TOOL_AGENT_PATTERN_ID,
+  findPatternById,
+  canvasFromPattern,
+} from "./agent-patterns";
 
 export const STORAGE_KEY_V1 = "agent-studio:v1";
 export const STORAGE_KEY_V2 = "agent-studio:v2";
@@ -38,72 +49,13 @@ export const STORAGE_KEY_V4 = "agent-studio:v4";
 export const STORAGE_VERSION_V3 = 3;
 export const STORAGE_VERSION_V4 = 4;
 
-// Seed graph reused by both new-project flow and v1 hydration default.
-export const SEED_NODES = [
-  {
-    id: "intake",
-    role: "agent",
-    title: "Intake",
-    description: "Normalize the user goal and identify missing inputs before routing.",
-    instructions: "",
-    x: 120,
-    y: 200,
-    w: 220,
-    h: 130,
-  },
-  {
-    id: "policy",
-    role: "guardrail",
-    title: "Policy gate",
-    description: "Classify read, write, network, shell, and credential intent against permissions.",
-    instructions: "",
-    x: 400,
-    y: 200,
-    w: 220,
-    h: 130,
-  },
-  {
-    id: "orch",
-    role: "orchestrator",
-    title: "Orchestrator",
-    description: "Choose the next action from the active tool pool.",
-    instructions: "",
-    x: 680,
-    y: 200,
-    w: 220,
-    h: 130,
-  },
-  {
-    id: "exec",
-    role: "executor",
-    title: "Executor",
-    description: "Run approved reads or writes and return structured results.",
-    instructions: "",
-    x: 680,
-    y: 380,
-    w: 220,
-    h: 130,
-  },
-  {
-    id: "evalCheck",
-    role: "eval",
-    title: "Eval check",
-    description: "Check output, permissions, and guardrail invariants.",
-    instructions: "",
-    x: 960,
-    y: 290,
-    w: 220,
-    h: 130,
-  },
-];
-
-export const SEED_EDGES = [
-  { id: "intake->policy", from: "intake", to: "policy" },
-  { id: "policy->orch", from: "policy", to: "orch" },
-  { id: "orch->exec", from: "orch", to: "exec" },
-  { id: "exec->evalCheck", from: "exec", to: "evalCheck" },
-  { id: "orch->evalCheck", from: "orch", to: "evalCheck" },
-];
+// Pass 9: seed comes from the canonical Solo Tool Agent pattern. We expose
+// SEED_NODES / SEED_EDGES as plain arrays for backward compatibility — older
+// callers that imported these arrays directly continue to work. Cloning is
+// caller-side as before.
+const _soloPattern = findPatternById(SOLO_TOOL_AGENT_PATTERN_ID);
+export const SEED_NODES = _soloPattern.nodes.map((n) => ({ ...n }));
+export const SEED_EDGES = _soloPattern.edges.map((e) => ({ ...e }));
 
 export function makeProjectId() {
   // Short, sortable-ish, sufficient for a single-user local tool.
@@ -111,13 +63,9 @@ export function makeProjectId() {
 }
 
 export function seedCanvas() {
-  return {
-    // Deep clone seeds so per-project mutations don't bleed across projects.
-    nodes: SEED_NODES.map((n) => ({ ...n })),
-    edges: SEED_EDGES.map((e) => ({ ...e })),
-    pan: { x: 0, y: 0 },
-    zoom: 1,
-  };
+  // Deep clone via the pattern lib so per-project mutations don't bleed
+  // across projects.
+  return canvasFromPattern(_soloPattern);
 }
 
 export function makeProject({

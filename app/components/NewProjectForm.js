@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import WorkingFolderInput from "./WorkingFolderInput";
 import UploadZone from "./UploadZone";
 import { PERMITTED_PATH_PREFIXES, looksAbsolutePath } from "../lib/projects";
+import { canvasFromPattern } from "../lib/agent-patterns";
 
 // Inline new-project form. Submits a fully-formed project payload via onCreate.
 //
@@ -21,8 +22,8 @@ import { PERMITTED_PATH_PREFIXES, looksAbsolutePath } from "../lib/projects";
 // (looksAbsolutePath + permitted prefix) and rely on the server's authoritative
 // answer when the user actually uploads a file. A later refactor could have
 // WorkingFolderInput report status upward; for now keep it self-contained.
-export default function NewProjectForm({ onCreate, onCancel }) {
-  const [name, setName] = useState("");
+export default function NewProjectForm({ onCreate, onCancel, seedPattern }) {
+  const [name, setName] = useState(seedPattern?.name || "");
   const [workingFolder, setWorkingFolder] = useState("");
   const [folderValidated, setFolderValidated] = useState(false);
   const [goal, setGoal] = useState("");
@@ -30,6 +31,15 @@ export default function NewProjectForm({ onCreate, onCancel }) {
   const [outcome, setOutcome] = useState("");
   const [uploads, setUploads] = useState([]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+
+  // Pass 9: when a seedPattern is supplied (e.g. user picked a pattern in the
+  // onboarding wizard or the landing pattern picker), pre-fill the project
+  // name with the pattern name on first mount and on pattern change. We don't
+  // overwrite a name the user has already typed.
+  useEffect(() => {
+    if (!seedPattern) return;
+    setName((current) => (current && current.trim().length > 0 ? current : seedPattern.name));
+  }, [seedPattern]);
 
   // Whether the working folder *might* be valid. We surface this for the
   // submit gate even before the server round-trips, so the user gets fast
@@ -99,6 +109,11 @@ export default function NewProjectForm({ onCreate, onCancel }) {
     e.preventDefault();
     setSubmitAttempted(true);
     if (submitBlockedReason) return;
+    // Pass 9: when a seedPattern was supplied, attach its canvas (deep-cloned
+    // by canvasFromPattern) to the create payload. The landing page passes
+    // this through to makeProject({canvas}) so the project starts on the
+    // pattern's graph instead of the default Solo Tool Agent seed.
+    const canvas = seedPattern ? canvasFromPattern(seedPattern) : undefined;
     onCreate({
       name: name.trim(),
       workingFolder: workingFolder.trim(),
@@ -106,13 +121,27 @@ export default function NewProjectForm({ onCreate, onCancel }) {
       context: context.trim(),
       outcome: outcome.trim(),
       uploads,
+      canvas,
+      seedPatternId: seedPattern?.id,
     });
   }
 
   const goalWarn = submitAttempted && !goal.trim();
 
   return (
-    <form className="np-form" onSubmit={onSubmit} data-new-project-form>
+    <form
+      className="np-form"
+      onSubmit={onSubmit}
+      data-new-project-form
+      data-new-project-seed-pattern={seedPattern?.id || ""}
+    >
+      {seedPattern && (
+        <div className="np-pattern-banner" data-new-project-pattern-banner>
+          <span className="np-pattern-label">Pattern</span>
+          <span className="np-pattern-name">{seedPattern.name}</span>
+          <span className="np-pattern-desc">{seedPattern.shortDescription}</span>
+        </div>
+      )}
       <div className="np-grid">
         <label className="np-field">
           <span className="np-label">Name</span>
@@ -272,6 +301,32 @@ export default function NewProjectForm({ onCreate, onCancel }) {
         .np-blocked {
           font-size: 12px;
           color: var(--muted);
+        }
+        .np-pattern-banner {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          padding: 10px 14px;
+          border: 1px solid var(--border);
+          border-left: 3px solid var(--accent);
+          border-radius: 8px;
+          background: var(--accent-soft);
+        }
+        .np-pattern-label {
+          font-size: 11px;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--accent-strong);
+        }
+        .np-pattern-name {
+          font-size: 14px;
+          font-weight: 600;
+          color: var(--ink);
+        }
+        .np-pattern-desc {
+          font-size: 12px;
+          color: var(--muted);
+          line-height: 1.4;
         }
       `}</style>
     </form>

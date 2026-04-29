@@ -454,6 +454,73 @@ async function main() {
   }
   ok(`inferred-edges: cache (studio-only) excluded from agent.md`);
 
+  // ── 7. Pass 17 — disk round-trip + agent-builder validation ──────────
+  //
+  // Simulates the UI flow:
+  //   exportProjectToSpec → write each file to tmp dir → walk tmp dir →
+  //     load files back → importSpecToProject → compare node/edge shape.
+  //   Then attempt to import agent-builder's validateSpec directly from
+  //     ../agent-builder/lib/generator.js. If the file isn't reachable
+  //     (CI without the sibling repo), we skip with a note instead of
+  //     failing — the inlined validateSpec already covers the contract.
+
+  const tmpRoot = await fs.mkdtemp(path.join((await import("node:os")).tmpdir(), "agent-studio-pass17-"));
+  const specRoot = path.join(tmpRoot, "spec");
+  await fs.mkdir(specRoot, { recursive: true });
+  for (const f of exported.files) {
+    const target = path.join(specRoot, f.path);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, f.content, "utf8");
+  }
+  // Walk the dir and read back into the importer's expected shape.
+  async function* walk(rootRel = "") {
+    const here = rootRel ? path.join(specRoot, rootRel) : specRoot;
+    const entries = await fs.readdir(here, { withFileTypes: true });
+    for (const e of entries) {
+      const childRel = rootRel ? `${rootRel}/${e.name}` : e.name;
+      if (e.isDirectory()) yield* walk(childRel);
+      else if (e.isFile()) yield childRel;
+    }
+  }
+  const readBack = [];
+  for await (const rel of walk()) {
+    const content = await fs.readFile(path.join(specRoot, rel), "utf8");
+    readBack.push({ path: rel, content });
+  }
+  if (readBack.length !== exported.files.length) {
+    fail(`disk round-trip: wrote ${exported.files.length} files, read back ${readBack.length}`);
+  }
+  const diskReimported = importSpecToProject(readBack);
+  if (diskReimported.canvas.nodes.length !== original.canvas.nodes.length) {
+    fail(`disk round-trip: node count drift after disk roundtrip`);
+  }
+  if (diskReimported.canvas.edges.length !== original.canvas.edges.length) {
+    fail(`disk round-trip: edge count drift after disk roundtrip`);
+  }
+  ok(`disk round-trip: write to disk → read back → reimport preserves node/edge counts`);
+
+  // agent-builder validateSpec — best-effort. The studio inlines an
+  // identical implementation; this assertion checks the sibling file
+  // hasn't drifted in a way that would break consumers.
+  try {
+    const agentBuilderUrl = new URL("../../agent-builder/lib/generator.js", import.meta.url);
+    const ab = await import(agentBuilderUrl.href);
+    if (typeof ab.validateSpec !== "function") {
+      console.log("SKIP agent-builder validateSpec import: function not exported");
+    } else {
+      const errs = ab.validateSpec(exported.spec);
+      if (errs.length) {
+        fail(`agent-builder validateSpec rejected exported spec: ${errs.join("; ")}`);
+      }
+      ok(`agent-builder validateSpec accepts the exported spec`);
+    }
+  } catch (err) {
+    console.log(`SKIP agent-builder validateSpec import: ${err?.message || err}`);
+  }
+
+  // Cleanup tmp.
+  await fs.rm(tmpRoot, { recursive: true, force: true });
+
   console.log("");
   console.log("Summary:");
   console.log(`  files emitted:    ${exported.files.length}`);

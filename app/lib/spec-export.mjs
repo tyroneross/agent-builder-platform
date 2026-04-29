@@ -503,15 +503,20 @@ export function exportProjectToSpec(project, options = {}) {
   const createdAt = options.createdAt ?? new Date().toISOString();
 
   // Studio-only fields the exporter drops, surfaced in README so the
-  // downstream consumer knows what was excluded.
+  // downstream consumer knows what was excluded. Order + wording mirror
+  // docs/SPEC.md#bucket-table so the doc stays the source of truth; if you
+  // edit one, edit the other.
   const strippedFields = [
-    "canvas.nodes[].x / y / w / h (layout)",
-    "canvas.nodes[].mockOutput (Pass 14 — runtime substitution, never exported)",
+    "canvas.nodes[].x / y / w / h (layout hints)",
+    "canvas.nodes[].mockOutput (Pass 15 — studio-only runtime substitution)",
     "canvas.nodes[].fixture.source (manual vs upstream-cache hint)",
-    "runCache (per-node solo-run cache)",
-    "uploads (local file references)",
+    "runCache (per-node solo-run cache + Pass 16 inferred-edges cache)",
+    "snapshots (Pass 14.5 — local restore points)",
+    "status (Pass 14.5 — completion lock)",
+    "uploads (local file references; contents inlined into prompts at runtime)",
     "workingFolder",
     "canvas.pan / zoom",
+    "inferred-but-not-accepted edges (Pass 16 — ghost overlay only)",
   ];
 
   const files = [

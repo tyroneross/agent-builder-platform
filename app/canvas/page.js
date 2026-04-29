@@ -44,6 +44,10 @@ import {
   importMarkdownToProject,
 } from "../lib/markdown-export.mjs";
 import {
+  exportProjectToSpec,
+  importSpecToProject,
+} from "../lib/spec-export.mjs";
+import {
   approxProjectBytes,
   approxSnapshotBytes,
   clearQuotaCache,
@@ -1140,6 +1144,116 @@ export default function StudioCanvas() {
     }
   }
 
+  // Pass 17 — Export agent spec. Calls exportProjectToSpec on the live
+  // project, sends the 10-file payload to /api/fs/write-spec, which
+  // atomically writes them under <workingFolder>/spec/. Surfaces errors
+  // via window.alert (consistent with the Pass 14.5 markdown path —
+  // a future Pass can replace these alerts with toasts).
+  async function exportSpec() {
+    if (!liveProject) return;
+    if (!liveProject.workingFolder || !liveProject.workingFolder.startsWith("/")) {
+      if (typeof window !== "undefined") {
+        window.alert("Set the project's working folder before exporting the spec.");
+      }
+      return;
+    }
+    let bundle;
+    try {
+      bundle = exportProjectToSpec(liveProject);
+    } catch (err) {
+      if (typeof window !== "undefined") {
+        window.alert(`Export failed: ${err?.message || "spec validation error"}`);
+      }
+      return;
+    }
+    try {
+      const res = await fetch("/api/fs/write-spec", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          workingFolder: liveProject.workingFolder,
+          files: bundle.files,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        if (typeof window !== "undefined") {
+          window.alert(`Export failed: ${json.error || res.status}`);
+        }
+        return;
+      }
+      if (typeof window !== "undefined") {
+        window.alert(`Wrote ${json.fileCount} file(s) (${json.totalBytes} bytes) to ${json.savedDir}`);
+      }
+    } catch (err) {
+      if (typeof window !== "undefined") {
+        window.alert(`Export failed: ${err?.message || "network error"}`);
+      }
+    }
+  }
+
+  // Pass 17 — Import agent spec. Prompts the user for an absolute path to
+  // a `<workingFolder>/spec/` directory, reads the 10 files via
+  // /api/fs/read-spec, and creates a new project from the imported spec.
+  // Does not overwrite an existing project — the imported spec lands as a
+  // fresh entry in the project switcher.
+  async function importSpec() {
+    if (typeof window === "undefined") return;
+    const guess = liveProject?.workingFolder
+      ? `${liveProject.workingFolder.replace(/\/+$/, "")}/spec`
+      : "/Users/";
+    const specDir = window.prompt("Path to spec directory:", guess);
+    if (!specDir) return;
+    let json;
+    try {
+      const res = await fetch("/api/fs/read-spec", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ specDir }),
+      });
+      json = await res.json();
+      if (!res.ok || !json?.ok) {
+        window.alert(`Import failed: ${json?.error || res.status}`);
+        return;
+      }
+    } catch (err) {
+      window.alert(`Import failed: ${err?.message || "network error"}`);
+      return;
+    }
+    let parsed;
+    try {
+      parsed = importSpecToProject(json.files);
+    } catch (err) {
+      window.alert(`Spec parse failed: ${err?.message || "invalid spec"}`);
+      return;
+    }
+    if (persistTimerRef.current) {
+      clearTimeout(persistTimerRef.current);
+      persistTimerRef.current = null;
+    }
+    setStore((prev) => {
+      if (!prev) return prev;
+      const flushed = withCanvasUpdated(prev, prev.activeProjectId, { nodes, edges, pan, zoom });
+      const next = {
+        ...flushed,
+        projects: [...flushed.projects, parsed],
+        activeProjectId: parsed.id,
+      };
+      writeStore(next);
+      skipNextMirrorRef.current = true;
+      queueMicrotask(() => {
+        setNodes(parsed.canvas.nodes);
+        setEdges(parsed.canvas.edges);
+        setPan(parsed.canvas.pan);
+        setZoom(parsed.canvas.zoom);
+        setSelectedId(null);
+        setSelectedEdgeId(null);
+        setExpandedId(null);
+      });
+      return next;
+    });
+  }
+
   // Pass 14.5 — Import markdown. Opens a file picker, parses the file as
   // agent-md/v1, creates a NEW project (does not overwrite anything), and
   // routes into it.
@@ -1505,6 +1619,25 @@ export default function StudioCanvas() {
             data-canvas-import-md
           >
             import markdown
+          </button>
+          {/* Pass 17 — agent-spec/v1 export + import. Distinct from the
+              single-file markdown export above; this writes the 10-file
+              directory consumable by agent-builder. */}
+          <button
+            className="tool-btn"
+            onClick={exportSpec}
+            title="Write the 10-file agent-spec/v1 directory to <workingFolder>/spec/"
+            data-canvas-export-spec
+          >
+            export spec
+          </button>
+          <button
+            className="tool-btn"
+            onClick={importSpec}
+            title="Import an agent-spec/v1 directory as a new project"
+            data-canvas-import-spec
+          >
+            import spec
           </button>
           <span className="tool-sep" />
           {/* Pass 15 — Inspect last run. Visible whenever a transcript is in

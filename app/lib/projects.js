@@ -603,6 +603,27 @@ export function withRunCacheCleared(project) {
   return { ...project, runCache: {} };
 }
 
+// Pass 15 — set / clear a node's `mockOutput`. mockOutput is studio-only;
+// the runtime substitutes it before any LLM call. Setting `null` is a
+// clear. Both helpers return a new project with the canvas patched.
+export function withNodeMockSet(project, nodeId, value) {
+  if (!project || typeof project !== "object") return project;
+  if (typeof nodeId !== "string" || !nodeId) return project;
+  return {
+    ...project,
+    canvas: {
+      ...project.canvas,
+      nodes: project.canvas.nodes.map((n) =>
+        n.id === nodeId ? { ...n, mockOutput: value } : n,
+      ),
+    },
+  };
+}
+
+export function withNodeMockCleared(project, nodeId) {
+  return withNodeMockSet(project, nodeId, null);
+}
+
 // Pass 14.5 — freeze a project for snapshot storage. Strips `snapshots` (no
 // recursion) and `runCache` (studio-only per Pass 14 buckets). Returns a
 // fresh object so callers can safely deep-clone.

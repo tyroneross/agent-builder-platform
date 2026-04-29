@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import InspectorPanel from "../components/InspectorPanel";
+import MockEditorModal from "../components/MockEditorModal";
 import ProjectSwitcher from "../components/ProjectSwitcher";
 import SoloRunModal from "../components/SoloRunModal";
 import StoragePanel from "../components/StoragePanel";
@@ -26,6 +28,8 @@ import {
   withSnapshotRestored,
   withSnapshotDeleted,
   withStatusChanged,
+  withNodeMockSet,
+  withNodeMockCleared,
   isProjectLocked,
 } from "../lib/projects";
 import { templateFor } from "../lib/role-templates.mjs";
@@ -101,6 +105,17 @@ export default function StudioCanvas() {
   const [storageRefreshKey, setStorageRefreshKey] = useState(0);
   const [storageToast, setStorageToast] = useState(null); // { text } | null
   const skippedAutoSnapshotShownRef = useRef(false);
+
+  // Pass 15 — inspector + mock editor state.
+  // `lastTranscript`: the most recent full-graph transcript captured from a
+  //   Test Panel run. Inspector panels read per-node records from this.
+  // `inspectorNodeId`: which node the inspector is bound to (right-click →
+  //   Inspect, or click the toolbar badge).
+  // `mockEditorNodeId`: which node the mock editor is bound to (right-click
+  //   → Set mock).
+  const [lastTranscript, setLastTranscript] = useState(null);
+  const [inspectorNodeId, setInspectorNodeId] = useState(null);
+  const [mockEditorNodeId, setMockEditorNodeId] = useState(null);
 
   const containerRef = useRef(null);
   const dragState = useRef(null);
@@ -688,6 +703,62 @@ export default function StudioCanvas() {
     clearQuotaCache();
     setStorageRefreshKey((k) => k + 1);
   }, []);
+
+  // Pass 15 — capture the most recent run transcript so the inspector can
+  // bind to its per-node records. Stored in component state (not
+  // persisted) — the inspector is a session-scoped tool today; if a future
+  // pass needs cross-session inspection we'll spool to localStorage under
+  // the recentTranscriptsKept cap from inspector-config.
+  const handleTranscriptComplete = useCallback((transcript) => {
+    setLastTranscript(transcript || null);
+  }, []);
+
+  const openInspector = useCallback((nodeId) => {
+    setContextMenu(null);
+    setInspectorNodeId(nodeId);
+  }, []);
+
+  const openMockEditor = useCallback((nodeId) => {
+    setContextMenu(null);
+    if (locked) return;
+    setMockEditorNodeId(nodeId);
+  }, [locked]);
+
+  const handleSaveMock = useCallback((nodeId, value) => {
+    setStore((prev) => {
+      if (!prev) return prev;
+      const next = withProjectUpdated(prev, prev.activeProjectId, (p) =>
+        withNodeMockSet(p, nodeId, value),
+      );
+      writeStore(next);
+      return next;
+    });
+    // Mirror into in-memory nodes so the canvas reflects immediately.
+    setNodes((arr) =>
+      arr.map((n) => (n.id === nodeId ? { ...n, mockOutput: value } : n)),
+    );
+  }, []);
+
+  const handleClearMock = useCallback((nodeId) => {
+    setStore((prev) => {
+      if (!prev) return prev;
+      const next = withProjectUpdated(prev, prev.activeProjectId, (p) =>
+        withNodeMockCleared(p, nodeId),
+      );
+      writeStore(next);
+      return next;
+    });
+    setNodes((arr) =>
+      arr.map((n) => (n.id === nodeId ? { ...n, mockOutput: null } : n)),
+    );
+  }, []);
+
+  // Pass 15 — Replay this node from the inspector. Reuses the solo-run modal
+  // so the user can tweak inputs before re-running.
+  const handleReplayFromInspector = useCallback((nodeId) => {
+    setInspectorNodeId(null);
+    openSoloRun(nodeId);
+  }, [openSoloRun]);
 
   // Pass 14.5 → 14.6 — Save snapshot with storage preflight.
   // We flush the live canvas state into the project first (the debounced
@@ -1302,6 +1373,27 @@ export default function StudioCanvas() {
             import markdown
           </button>
           <span className="tool-sep" />
+          {/* Pass 15 — Inspect last run. Visible whenever a transcript is in
+              memory; clicking opens the inspector against the currently-
+              selected node (or the first transcript node if none selected). */}
+          {lastTranscript && (
+            <button
+              type="button"
+              className="tool-btn"
+              onClick={() => {
+                const targetId =
+                  selectedId
+                  || lastTranscript?.nodes?.[0]?.id
+                  || nodes[0]?.id
+                  || null;
+                if (targetId) openInspector(targetId);
+              }}
+              title="Open the inspector against the most recent run"
+              data-canvas-inspect-last-run
+            >
+              inspect last run
+            </button>
+          )}
           {/* Pass 14.6 — toolbar storage pill. Click opens the slide-over. */}
           <StoragePill
             onOpen={() => setStoragePanelOpen(true)}
@@ -1489,6 +1581,7 @@ export default function StudioCanvas() {
           isOpen={testPanelOpen}
           onToggle={() => setTestPanelOpen((o) => !o)}
           locked={locked}
+          onTranscriptComplete={handleTranscriptComplete}
         />
       </div>
 
@@ -1649,6 +1742,23 @@ export default function StudioCanvas() {
           >
             Run solo
           </button>
+          <button
+            type="button"
+            className="canvas-context-item"
+            onClick={() => openInspector(contextMenu.nodeId)}
+            data-canvas-context-inspect
+          >
+            Inspect last run
+          </button>
+          <button
+            type="button"
+            className="canvas-context-item"
+            onClick={() => openMockEditor(contextMenu.nodeId)}
+            disabled={locked}
+            data-canvas-context-set-mock
+          >
+            Set mock
+          </button>
         </div>
       )}
 
@@ -1668,6 +1778,26 @@ export default function StudioCanvas() {
           {storageToast.text}
         </div>
       )}
+
+      {/* Pass 15 — run inspector panel + per-node mock editor. */}
+      <InspectorPanel
+        open={inspectorNodeId != null}
+        onClose={() => setInspectorNodeId(null)}
+        node={inspectorNodeId ? nodes.find((n) => n.id === inspectorNodeId) : null}
+        record={
+          inspectorNodeId && lastTranscript?.nodes
+            ? lastTranscript.nodes.find((n) => n.id === inspectorNodeId)
+            : null
+        }
+        onReplay={handleReplayFromInspector}
+      />
+      <MockEditorModal
+        open={mockEditorNodeId != null}
+        node={mockEditorNodeId ? nodes.find((n) => n.id === mockEditorNodeId) : null}
+        onClose={() => setMockEditorNodeId(null)}
+        onSave={handleSaveMock}
+        onClear={handleClearMock}
+      />
 
       <style jsx>{`
         .studio-shell {

@@ -21,6 +21,10 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { runProject, planExecution } from "../../../lib/agent-runtime.mjs";
+import {
+  registerStepController,
+  disposeController,
+} from "../../../lib/run-controllers.mjs";
 
 export const runtime = "nodejs";
 
@@ -193,6 +197,11 @@ export async function POST(request) {
   const project = body?.project;
   const query = typeof body?.query === "string" ? body.query : "";
   const model = typeof body?.model === "string" && body.model ? body.model : undefined;
+  // Pass 15 — step-mode flag. When true, the SSE stream emits
+  // `run-started { runId }` first; the client POSTs to
+  // /api/agent/run/control with `{runId, action}` to advance / skip-to-end /
+  // cancel between levels.
+  const step = body?.step === true;
 
   if (!project || !project.canvas || !Array.isArray(project.canvas.nodes)) {
     return Response.json(
@@ -230,11 +239,21 @@ export async function POST(request) {
       const onAbort = () => ac.abort();
       request.signal.addEventListener("abort", onAbort);
 
+      // Pass 15 — register a step controller when step-mode is requested.
+      // The controller's gate is passed to runProject; the client receives
+      // the runId via the first SSE event so it can POST to
+      // /api/agent/run/control.
+      const stepController = step ? registerStepController() : null;
+      if (stepController) {
+        send({ type: "run-started", runId: stepController.runId, step: true });
+      }
+
       try {
         if (planError) {
           send({ type: "node-error", id: null, error: planError });
           send({ type: "complete", transcript: { error: planError }, brief: `# Error\n\n${planError}\n` });
           controller.close();
+          if (stepController) disposeController(stepController.runId);
           return;
         }
 
@@ -257,6 +276,7 @@ export async function POST(request) {
           loadedUploads: uploads.loaded,
           baseUrl: process.env.OLLAMA_BASE_URL || "http://localhost:11434",
           signal: ac.signal,
+          stepGate: stepController ? stepController.gate : undefined,
           onEvent: (evt) => {
             // Attach runDir to the final `complete` event so the UI can show
             // the path. We swallow it on every other event to keep frames lean.
@@ -310,6 +330,9 @@ export async function POST(request) {
         });
       } finally {
         request.signal.removeEventListener("abort", onAbort);
+        if (stepController) {
+          disposeController(stepController.runId);
+        }
         try {
           controller.close();
         } catch {

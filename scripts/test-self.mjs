@@ -266,6 +266,121 @@ async function runLoadedUploadsSubTest(fixtureProject) {
   ok(`loaded-uploads sub-test: BEEP sentinel + header reached every user prompt`);
 }
 
+// Pass 15 — assert that node.mockOutput skips the LLM call entirely and
+// emits `mocked: true` on node-end. We mock `/api/tags`; the chat handler
+// would fail the test if it were ever called (we return 500). The runtime
+// must short-circuit before hitting it.
+async function runMockSubstitutionSubTest(fixtureProject) {
+  const project = JSON.parse(JSON.stringify(fixtureProject));
+  // Set a mock on every node; if any reaches /api/chat the test fails.
+  const MOCK = { result: "MOCK_PASS_15" };
+  for (const n of project.canvas.nodes) n.mockOutput = MOCK;
+
+  const realFetch = globalThis.fetch;
+  let chatCalled = false;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.endsWith("/api/tags")) {
+      return new Response(JSON.stringify({ models: [{ name: "mock-model" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (u.endsWith("/api/chat")) {
+      chatCalled = true;
+      return new Response("should not be reached", { status: 500 });
+    }
+    return new Response("not mocked", { status: 500 });
+  };
+
+  const events = [];
+  try {
+    await runProject({
+      project,
+      query: "mock substitution test",
+      model: "mock-model",
+      baseUrl: "http://mock-ollama",
+      onEvent: (e) => events.push(e),
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  if (chatCalled) fail("mock-substitution sub-test: /api/chat was called despite every node having a mock");
+  const ends = events.filter((e) => e.type === "node-end");
+  if (ends.length !== project.canvas.nodes.length) {
+    fail(
+      `mock-substitution sub-test: expected ${project.canvas.nodes.length} node-end events, saw ${ends.length}`,
+    );
+  }
+  for (const e of ends) {
+    if (e.mocked !== true) fail(`mock-substitution sub-test: node ${e.id} missing mocked:true`);
+  }
+  ok(`mock-substitution sub-test: ${ends.length} nodes mocked, /api/chat never called`);
+}
+
+// Pass 15 — assert that the step gate pauses the runtime between levels and
+// that "skip-to-end" releases the rest at once. We run with a gate that
+// records each level call and resolves immediately for skip-mode.
+async function runStepGateSubTest(fixtureProject) {
+  const project = JSON.parse(JSON.stringify(fixtureProject));
+  // Same mock-fetch wiring so we don't depend on Ollama.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const u = String(url);
+    if (u.endsWith("/api/tags")) {
+      return new Response(JSON.stringify({ models: [{ name: "mock-model" }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (u.endsWith("/api/chat")) {
+      const body = JSON.stringify({
+        message: { content: '{"result":"ok"}' },
+        done: true,
+      });
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode(body + "\n"));
+          controller.close();
+        },
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "content-type": "application/x-ndjson" },
+      });
+    }
+    return new Response("not mocked", { status: 500 });
+  };
+
+  const gateCalls = [];
+  try {
+    await runProject({
+      project,
+      query: "step gate test",
+      model: "mock-model",
+      baseUrl: "http://mock-ollama",
+      stepGate: async ({ level, nodeIds }) => {
+        gateCalls.push({ level, nodeIds: nodeIds.slice() });
+      },
+      onEvent: () => {},
+    });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  // The seed graph is 5 levels (1 node each). Gate must be called exactly
+  // once per level, in order.
+  const expectedLevels = project.canvas.nodes.length; // 5 levels for seed
+  if (gateCalls.length !== expectedLevels) {
+    fail(`step-gate sub-test: expected ${expectedLevels} gate calls, saw ${gateCalls.length}`);
+  }
+  for (let i = 0; i < gateCalls.length; i++) {
+    if (gateCalls[i].level !== i) fail(`step-gate sub-test: gate call ${i} had level ${gateCalls[i].level}`);
+  }
+  ok(`step-gate sub-test: gate called ${gateCalls.length} times in order, one per level`);
+}
+
 async function main() {
   const fixturePath = path.join(__dirname, "..", "test", "fixtures", "seed-project.json");
   const project = JSON.parse(await fs.readFile(fixturePath, "utf8"));
@@ -285,6 +400,9 @@ async function main() {
     await runSentinelOverrideSubTest(project);
     // Pass 11: loaded-uploads sub-test, also fetch-mocked.
     await runLoadedUploadsSubTest(project);
+    // Pass 15: mock-substitution + step-gate sub-tests.
+    await runMockSubstitutionSubTest(project);
+    await runStepGateSubTest(project);
     process.exit(0);
   }
 
@@ -353,6 +471,9 @@ async function main() {
   await runSentinelOverrideSubTest(project);
   // Pass 11: loaded-uploads sub-test under the same process.
   await runLoadedUploadsSubTest(project);
+  // Pass 15: mock-substitution + step-gate sub-tests under the same process.
+  await runMockSubstitutionSubTest(project);
+  await runStepGateSubTest(project);
 
   console.log("");
   console.log("Summary:");

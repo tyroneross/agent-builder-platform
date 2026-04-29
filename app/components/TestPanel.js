@@ -34,7 +34,7 @@ function statusColor(status) {
   return "var(--faint)";
 }
 
-export default function TestPanel({ project, isOpen, onToggle, locked = false }) {
+export default function TestPanel({ project, isOpen, onToggle, locked = false, onTranscriptComplete }) {
   const [models, setModels] = useState([]);
   const [modelsError, setModelsError] = useState(null);
   const [selectedModel, setSelectedModel] = useState("");
@@ -45,6 +45,12 @@ export default function TestPanel({ project, isOpen, onToggle, locked = false })
   const [brief, setBrief] = useState("");
   const [runDir, setRunDir] = useState(null);
   const [error, setError] = useState(null);
+  // Pass 15 — step mode + per-run controller. `runId` is set after the
+  // server emits `run-started`; clears on `complete`. `pausedAtLevel` is
+  // the most recent `level-start` event's level so the Next button label
+  // can show "Next level (after L<n>)".
+  const [runId, setRunId] = useState(null);
+  const [pausedAtLevel, setPausedAtLevel] = useState(null);
   // Pass 8: first-run-seen flag, hydrated from localStorage on project change.
   // Determines whether to show the example-query hint above the textarea.
   const [firstRunSeen, setFirstRunSeen] = useState(true);
@@ -167,6 +173,16 @@ export default function TestPanel({ project, isOpen, onToggle, locked = false })
 
   const handleEvent = useCallback((evt) => {
     if (!evt || typeof evt !== "object") return;
+    if (evt.type === "run-started") {
+      // Pass 15 — server registered a step controller; capture runId so
+      // advance / skip / cancel can target it.
+      setRunId(evt.runId || null);
+      return;
+    }
+    if (evt.type === "level-start") {
+      setPausedAtLevel(typeof evt.level === "number" ? evt.level : null);
+      return;
+    }
     if (evt.type === "warning") {
       setWarnings((arr) => [...arr, evt.text]);
       return;
@@ -193,6 +209,7 @@ export default function TestPanel({ project, isOpen, onToggle, locked = false })
           status: "ok",
           durationMs: evt.durationMs,
           bytes: evt.bytes,
+          mocked: evt.mocked === true,
         },
       }));
       return;
@@ -211,6 +228,14 @@ export default function TestPanel({ project, isOpen, onToggle, locked = false })
     if (evt.type === "complete") {
       setBrief(evt.brief || "");
       setRunDir(evt.runDir || null);
+      setRunId(null);
+      setPausedAtLevel(null);
+      // Pass 15 — surface the full transcript so the canvas page can mount
+      // the inspector against it. Includes per-node systemPrompt /
+      // userMessage / parsed / output / mocked.
+      if (evt.transcript) {
+        onTranscriptComplete?.(evt.transcript);
+      }
       // Pass 8: persist first-run-seen as soon as the run completes. We hold
       // the project id at call time via `project?.id`. If the user navigates
       // mid-run we still record against the project that owned the run.
@@ -226,7 +251,7 @@ export default function TestPanel({ project, isOpen, onToggle, locked = false })
       }
       return;
     }
-  }, [project?.id]);
+  }, [project?.id, onTranscriptComplete]);
 
   // Parse SSE text stream incrementally. We buffer between reads and split on
   // blank lines (the SSE event terminator). Each event payload is a single
@@ -285,19 +310,21 @@ export default function TestPanel({ project, isOpen, onToggle, locked = false })
     onToggle?.();
   }
 
-  async function startRun() {
+  async function startRun(step = false) {
     if (!project) return;
     if (running) return;
     markFirstRunSeen();
     resetRunState();
     setRunning(true);
+    setRunId(null);
+    setPausedAtLevel(null);
     const ac = new AbortController();
     abortRef.current = ac;
     try {
       const res = await fetch("/api/agent/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ project, query, model: selectedModel || undefined }),
+        body: JSON.stringify({ project, query, model: selectedModel || undefined, step }),
         signal: ac.signal,
       });
       if (!res.ok || !res.body) {
@@ -317,7 +344,31 @@ export default function TestPanel({ project, isOpen, onToggle, locked = false })
     }
   }
 
+  // Pass 15 — fire a control action against the active step controller. No
+  // local state mutation; the SSE stream emits the next `level-start` /
+  // `complete` events that drive UI transitions.
+  async function controlRun(action) {
+    if (!runId) return;
+    try {
+      await fetch("/api/agent/run/control", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runId, action }),
+      });
+    } catch (err) {
+      // Surfaced via warning; the run will still complete or hang on the
+      // next level. The Cancel-fetch handler is the hard stop.
+      setWarnings((w) => [...w, `control ${action}: ${err?.message || "failed"}`]);
+    }
+  }
+
   function cancelRun() {
+    // Pass 15 — when stepping, ask the controller to cancel cleanly first
+    // so the runtime emits a clean "cancelled" event and the SSE loop
+    // doesn't tear. Fall back to abort if no runId.
+    if (runId) {
+      controlRun("cancel");
+    }
     if (abortRef.current) {
       abortRef.current.abort();
     }
@@ -378,25 +429,61 @@ export default function TestPanel({ project, isOpen, onToggle, locked = false })
 
             <div className="tp-actions">
               {!running ? (
-                <button
-                  type="button"
-                  className="tool-btn tp-run"
-                  onClick={startRun}
-                  disabled={!project || models.length === 0 || locked}
-                  title={locked ? "Project is completed (read-only)" : undefined}
-                  data-test-panel-run
-                >
-                  Run
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="tool-btn tp-run"
+                    onClick={() => startRun(false)}
+                    disabled={!project || models.length === 0 || locked}
+                    title={locked ? "Project is completed (read-only)" : undefined}
+                    data-test-panel-run
+                  >
+                    Run
+                  </button>
+                  <button
+                    type="button"
+                    className="tool-btn"
+                    onClick={() => startRun(true)}
+                    disabled={!project || models.length === 0 || locked}
+                    title={locked ? "Project is completed (read-only)" : "Step through the chain one DAG level at a time"}
+                    data-test-panel-step-run
+                  >
+                    Step run
+                  </button>
+                </>
               ) : (
-                <button
-                  type="button"
-                  className="tool-btn tp-cancel"
-                  onClick={cancelRun}
-                  data-test-panel-cancel
-                >
-                  Cancel
-                </button>
+                <>
+                  {runId && (
+                    <>
+                      <button
+                        type="button"
+                        className="tool-btn"
+                        onClick={() => controlRun("advance")}
+                        title="Advance to the next DAG level"
+                        data-test-panel-next-level
+                      >
+                        Next level{pausedAtLevel != null ? ` (after L${pausedAtLevel})` : ""}
+                      </button>
+                      <button
+                        type="button"
+                        className="tool-btn"
+                        onClick={() => controlRun("skip-to-end")}
+                        title="Run the rest of the chain without further pauses"
+                        data-test-panel-skip-to-end
+                      >
+                        Skip to end
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    className="tool-btn tp-cancel"
+                    onClick={cancelRun}
+                    data-test-panel-cancel
+                  >
+                    Cancel
+                  </button>
+                </>
               )}
             </div>
           </div>

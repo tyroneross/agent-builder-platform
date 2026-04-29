@@ -148,8 +148,24 @@ async function main() {
   const fixturePath = path.join(__dirname, "..", "test", "fixtures", "seed-project.json");
   const original = JSON.parse(await fs.readFile(fixturePath, "utf8"));
 
+  // Pass 15 — seed a mock on the first node so the round-trip can assert
+  // the spec exporter strips it (mocks are studio-only).
+  const SENTINEL_MOCK = { result: "PASS-15-MOCK-SENTINEL", note: "if you see me, exporter regressed" };
+  if (original.canvas.nodes[0]) {
+    original.canvas.nodes[0].mockOutput = SENTINEL_MOCK;
+  }
+
   // 1. Export.
   const exported = exportProjectToSpec(original);
+
+  // Pass 15 — assert mockOutput sentinel does NOT appear anywhere in the
+  // exported spec. mocks are studio-only per the docs/SPEC.md bucket table.
+  for (const f of exported.files) {
+    if (f.content.includes("PASS-15-MOCK-SENTINEL")) {
+      fail(`spec file ${f.path} leaked mockOutput (studio-only)`);
+    }
+  }
+  ok(`spec excludes mockOutput (studio-only)`);
   const expectedFiles = [
     "agent.yaml",
     "manifest.json",
@@ -213,6 +229,15 @@ async function main() {
     // dedicated graph-level field.
   }
   ok(`reimport preserves portable fields (id, role, title, description, edges)`);
+
+  // Pass 15 — clear the studio-only mock before the behavioral round-trip
+  // so the original (with mock) doesn't drift from the reimported (no
+  // mock). The mock-strip assertion above has already proved the spec
+  // excludes it; the behavioral test is about runtime equivalence after a
+  // clean export → import.
+  if (original.canvas.nodes[0]) {
+    original.canvas.nodes[0].mockOutput = null;
+  }
 
   // 4. Behavioral round-trip — both runs against mocked Ollama.
   if (LIVE) {
@@ -278,11 +303,13 @@ async function main() {
     { id: "s-test-1", name: "Manual snap", createdAt: "2026-04-28T00:00:00Z", projectFrozen: { name: "frozen" } },
   ];
   enrichedOriginal.status = "completed";
+  // Pass 15 — agent.md must also exclude mockOutput (studio-only).
+  enrichedOriginal.canvas.nodes[0].mockOutput = { result: "PASS-15-MD-MOCK-SENTINEL" };
 
   const md = exportProjectToMarkdown(enrichedOriginal, { exportedAt: "2026-04-28T12:00:00Z" });
 
   // The markdown MUST NOT mention any of the studio-only fields.
-  for (const banned of ["runCache", "snapshots", "status:", "Manual snap"]) {
+  for (const banned of ["runCache", "snapshots", "status:", "Manual snap", "PASS-15-MD-MOCK-SENTINEL"]) {
     if (md.includes(banned)) {
       fail(`agent.md contains studio-only token: "${banned}"`);
     }

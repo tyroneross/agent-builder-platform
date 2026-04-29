@@ -36,12 +36,16 @@
 // TAG:ASSUMED — Ollama /api/chat NDJSON streaming protocol (documented stable).
 
 import { getEffectiveRoleTemplate, HARD_RULES } from "./role-templates.mjs";
+import { DEFAULT_RUNTIME_CONFIG } from "./runtime-config.mjs";
 
 const DEFAULT_BASE_URL = "http://localhost:11434";
 const DEFAULT_MODEL =
   (typeof process !== "undefined" && process.env && process.env.OLLAMA_MODEL) ||
   "gpt-oss:20b";
-const PER_LEVEL_PARALLELISM = 4;
+// Pass 15 — sourced from runtime-config so the value is visible alongside
+// other runtime tunables. Reading a const from the frozen config object
+// keeps the runtime hot path allocation-free.
+const PER_LEVEL_PARALLELISM = DEFAULT_RUNTIME_CONFIG.perLevelParallelism;
 
 // Pass 7: test-only ring buffer of the last system prompts composed by
 // buildMessages(). The self-consistency test inspects this to assert that a
@@ -373,6 +377,12 @@ export async function runProject({
   // allowlist; this lib stays filesystem-free so it remains testable under a
   // mocked fetch and portable to other deploy targets.
   loadedUploads,
+  // Pass 15 — optional async hook called BEFORE each DAG level executes.
+  // Implementers can return a promise that resolves when the user clicks
+  // "next level". Used by /api/agent/run when `step: true` is set in the
+  // request body. Default no-op resolves immediately so non-step runs are
+  // unaffected.
+  stepGate,
 }) {
   if (!project || !project.canvas) {
     throw new Error("project with canvas required");
@@ -426,6 +436,20 @@ export async function runProject({
     const ids = plan.levels[levelIdx];
     onEvent({ type: "level-start", level: levelIdx, nodeIds: ids });
 
+    // Pass 15 — step-through hook. The route uses this to wait for the
+    // client's "next level" click before advancing. Default no-op resolves
+    // immediately. The hook receives { level, nodeIds } so a future UI can
+    // render context before resuming.
+    if (typeof stepGate === "function") {
+      try {
+        await stepGate({ level: levelIdx, nodeIds: ids });
+      } catch (err) {
+        // A gate rejection is treated as a clean cancel.
+        onEvent({ type: "node-error", id: null, error: err?.message || "step cancelled" });
+        break;
+      }
+    }
+
     // Run in chunks of PER_LEVEL_PARALLELISM. Promise.all over each chunk.
     for (let i = 0; i < ids.length; i += PER_LEVEL_PARALLELISM) {
       const chunk = ids.slice(i, i + PER_LEVEL_PARALLELISM);
@@ -437,6 +461,43 @@ export async function runProject({
           const t0 = Date.now();
           try {
             const messages = buildMessages(node, project, query, plan.incoming, results, loadedUploads);
+            const systemPrompt = messages.find((m) => m.role === "system")?.content ?? "";
+            const userMessage = messages.find((m) => m.role === "user")?.content ?? "";
+
+            // Pass 15 — per-node mock substitution. When `mockOutput` is set,
+            // skip the LLM call entirely and emit the mock as the parsed
+            // payload. Mocks are studio-only (stripped on export per Pass 14
+            // bucket table); the runtime tags the event with `mocked: true`
+            // so the inspector can render the badge.
+            if (node.mockOutput != null) {
+              const parsed = node.mockOutput;
+              const text = typeof parsed === "string" ? parsed : JSON.stringify(parsed);
+              const bytes = Buffer.byteLength(text, "utf8");
+              const durationMs = Date.now() - t0;
+              results.set(id, {
+                id,
+                role: node.role,
+                title: node.title,
+                durationMs,
+                bytes,
+                parsed,
+                text,
+                mocked: true,
+                systemPrompt,
+                userMessage,
+              });
+              onEvent({
+                type: "node-end",
+                id,
+                durationMs,
+                bytes,
+                parsed,
+                output: text,
+                mocked: true,
+              });
+              return;
+            }
+
             const { text, parsed, bytes } = await streamChat(
               baseUrl,
               resolvedModel,
@@ -453,6 +514,8 @@ export async function runProject({
               bytes,
               parsed,
               text,
+              systemPrompt,
+              userMessage,
             });
             onEvent({
               type: "node-end",
@@ -501,6 +564,12 @@ export async function runProject({
         parsed: r?.parsed ?? null,
         output: r?.text ?? "",
         error: r?.error ?? null,
+        // Pass 15 — inspector context. Only present for nodes that actually
+        // ran (results entry exists). Mocked nodes carry `mocked: true` so
+        // the panel can show a badge without sniffing the payload.
+        systemPrompt: r?.systemPrompt ?? "",
+        userMessage: r?.userMessage ?? "",
+        mocked: r?.mocked === true,
       };
     }),
   };

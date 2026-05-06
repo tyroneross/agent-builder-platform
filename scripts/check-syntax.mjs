@@ -14,6 +14,7 @@ async function listFiles(dir) {
 }
 
 const files = [
+  ...await listFiles("bin"),
   ...await listFiles("src"),
   ...await listFiles("tests"),
   ...await listFiles("scripts"),

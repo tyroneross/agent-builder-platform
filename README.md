@@ -36,10 +36,47 @@ npm start
 
 Open `http://localhost:3031`.
 
+To make the app available as `cos` from your terminal:
+
+```bash
+npm link
+cos
+```
+
+Use a second terminal for terminal interaction while the browser app is running:
+
+```bash
+cos status
+cos talk
+```
+
+`cos talk` shows brief runtime notifications like `[connecting]`, `[ready]`,
+`[running]`, and `[done]`. It connects to the running CoS app at
+`http://127.0.0.1:3031`; if the app is not running, it starts a temporary local
+server for that terminal session.
+
+Inside `cos talk`:
+
+```text
+/status       show runtime state
+/models       show model state
+/approvals    show pending approvals
+/plan <goal>  run the daily planning ritual
+/note <text>  add context for later plans
+/clear        clear terminal context notes
+/quit         exit
+```
+
 Optional:
 
 ```bash
 PORT=3031 COS_WORKSPACE_DIR=/path/to/cos-workspace npm start
+```
+
+The `cos` command accepts the same environment variables:
+
+```bash
+PORT=3032 COS_WORKSPACE_DIR=/path/to/cos-workspace cos
 ```
 
 Ollama should be running separately:
@@ -94,6 +131,7 @@ chief-of-staff/
   src/public/             browser UI
   tests/                  node:test checks
   docs/architecture.md    product and safety architecture
+  docs/growth-and-coordination.md future growth and coordination guide
   sample-data/            sample calendar input
   cos-workspace/          created at runtime, ignored by git
 ```

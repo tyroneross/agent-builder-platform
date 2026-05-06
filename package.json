@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "description": "Standalone local-first Chief of Staff app for MacBook Pro + Ollama.",
+  "bin": {
+    "cos": "bin/cos.mjs"
+  },
   "scripts": {
     "start": "node src/server.mjs",
     "dev": "node --watch src/server.mjs",

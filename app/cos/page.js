@@ -29,6 +29,8 @@ export default function CosPage() {
   const [goals, setGoals] = useState("");
   const [sample, setSample] = useState(null); // last loaded sample for restore-button label
   const [running, setRunning] = useState(false);
+  const [showAbout, setShowAbout] = useState(true);
+  const [showRawJson, setShowRawJson] = useState(false);
 
   // ---------- cascade controls ----------
   const [allowCloud, setAllowCloud] = useState("on-failure");
@@ -221,7 +223,11 @@ export default function CosPage() {
     }
   }
 
-  const canRun = useMemo(() => !running, [running]);
+  const scheduleLooksLikeJson = /^\s*[\[{]/.test(schedule.trim());
+  const canRun = useMemo(
+    () => !running && (schedule.trim().length > 0 || goals.trim().length > 0 || sample != null),
+    [running, schedule, goals, sample],
+  );
   const allLanesUnreachable =
     error && error.includes("unreachable") && envStatus && !envStatus.groq && !envStatus.anthropic && !envStatus.openai;
 
@@ -230,11 +236,65 @@ export default function CosPage() {
       <header className="cos-header">
         <h1>Chief of Staff</h1>
         <p>
-          Local-first cascade. Falls back to Groq, Anthropic, then OpenAI when
-          local lanes fail. Telemetry per node, role-scoped briefs, learning
-          ledger injection.
+          Plans your week. Picks the three highest-leverage outcomes, builds a
+          time-block schedule, drafts follow-ups, surfaces decisions, and
+          flags risks.
         </p>
+        <button
+          type="button"
+          className="cos-disclosure"
+          onClick={() => setShowAbout((v) => !v)}
+          aria-expanded={showAbout}
+        >
+          {showAbout ? "Hide" : "Show"} how it works
+        </button>
       </header>
+
+      {showAbout && (
+        <section className="cos-about" aria-label="What this does and how to use it">
+          <div className="cos-about-grid">
+            <div>
+              <h3>Workflow</h3>
+              <ol>
+                <li>Tell it your week — paste a calendar, list events in plain text, or load the sample.</li>
+                <li>Optionally state a goal (e.g. &ldquo;ship the migration&rdquo;). Defaults to a productivity goal.</li>
+                <li>Click <em>Run agent</em>. Watch the cascade panel below.</li>
+                <li>Read the brief. Download the raw transcript, telemetry, or markdown brief.</li>
+              </ol>
+            </div>
+            <div>
+              <h3>What you get</h3>
+              <ul>
+                <li><strong>Top 3 outcomes</strong> — leverage-ranked, with rejected items called out.</li>
+                <li><strong>Time blocks</strong> — 5–9 named blocks for the week with rationale.</li>
+                <li><strong>Decisions to prep</strong> — options + recommendations.</li>
+                <li><strong>Follow-ups</strong> — owner / action / due date per item.</li>
+                <li><strong>Risk audit</strong> — missing owners, overload, unverified claims.</li>
+              </ul>
+            </div>
+            <div>
+              <h3>Cascade</h3>
+              <p>
+                Local first (Ollama: <code>qwen3:8b</code> for parse, <code>gemma4:26b</code> for
+                synthesis). On local failure, falls back to Groq cloud. Anthropic + OpenAI lanes
+                wired but stubbed — require keys to enable.
+              </p>
+            </div>
+          </div>
+          <div className="cos-about-status">
+            <h3>What&rsquo;s wired</h3>
+            <dl>
+              <div><dt>Ollama (local)</dt><dd>{envStatus ? "✓ live" : "checking…"}</dd></div>
+              <div><dt>Groq (cloud-1)</dt><dd>{envStatus?.groq ? "✓ key detected · llama-3.3-70b for synthesis, llama-3.1-8b for parse" : "no key — set GROQ_API_KEY in shell"}</dd></div>
+              <div><dt>Anthropic (cloud-2)</dt><dd>stubbed — provider shim returns &ldquo;disabled&rdquo;; flip on by replacing <code>lib/providers/anthropic.mjs</code></dd></div>
+              <div><dt>OpenAI (cloud-3)</dt><dd>stubbed — same pattern as Anthropic</dd></div>
+              <div><dt>Telemetry / downloads</dt><dd>✓ JSONL per run · brief.md · transcript.json</dd></div>
+              <div><dt>Learning ledger</dt><dd>✓ promoted lessons from prior runs inject into triage + time-block</dd></div>
+              <div><dt>Cascade events on SSE</dt><dd>✓ cascade-attempt · node-end · run-summary · lesson-loaded</dd></div>
+            </dl>
+          </div>
+        </section>
+      )}
 
       <CloudControls
         allowCloud={allowCloud}
@@ -271,16 +331,51 @@ export default function CosPage() {
         </header>
 
         <label className="cos-field">
-          <span>Schedule (JSON)</span>
+          <span>Your week {scheduleLooksLikeJson ? "· (JSON detected)" : "· paste calendar or describe events"}</span>
           <textarea
             rows={8}
             value={schedule}
             onChange={(e) => setSchedule(e.target.value)}
             disabled={running}
-            placeholder='{"weekOf": "2026-05-12", "fixedEvents": [...], "flexibleEvents": [...]}'
+            placeholder={
+              "Mon 9-11am: deep work on the migration\nMon 2pm: 1:1 with Sam\nTue 10-12: pitch dry run with team\nWed all day: heads-down\nThu 3-5pm: customer call\n\n— OR — paste your calendar export, OR — load the sample below."
+            }
             spellCheck={false}
           />
+          <div className="cos-field-meta">
+            <button
+              type="button"
+              className="cos-disclosure-inline"
+              onClick={() => setShowRawJson((v) => !v)}
+              aria-expanded={showRawJson}
+            >
+              {showRawJson ? "▾ Hide JSON wire view" : "▸ Show JSON wire view"}
+            </button>
+            <span className="cos-field-hint">
+              {scheduleLooksLikeJson
+                ? "Looks like JSON — will be passed through directly."
+                : "Free text gets parsed by the intake step into structured JSON before planning."}
+            </span>
+          </div>
         </label>
+
+        {showRawJson && (
+          <details className="cos-json-view" open>
+            <summary>Schedule (JSON wire format) — edit here for precise control</summary>
+            <textarea
+              rows={10}
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value)}
+              disabled={running}
+              placeholder='{"weekOf": "2026-05-12", "fixedEvents": [{"day":"Mon","start":"09:00","end":"11:00","title":"Deep work","kind":"deep"}], "flexibleEvents": []}'
+              spellCheck={false}
+              className="cos-json-textarea"
+            />
+            <p className="cos-field-hint">
+              This is the same field as &ldquo;Your week&rdquo; above — edits flow both ways. Use this view when you have JSON from a tool or want to specify shape exactly.
+            </p>
+          </details>
+        )}
 
         <label className="cos-field">
           <span>Goal (optional — defaults to a productivity goal)</span>
@@ -289,7 +384,7 @@ export default function CosPage() {
             value={goals}
             onChange={(e) => setGoals(e.target.value)}
             disabled={running}
-            placeholder="e.g. Become 100x more productive on high-leverage strengths."
+            placeholder="e.g. Ship the migration this week. Or: organize all the kid summer camps."
           />
         </label>
 
@@ -359,10 +454,140 @@ export default function CosPage() {
           letter-spacing: -0.01em;
         }
         .cos-header p {
-          margin: 6px 0 24px;
+          margin: 6px 0 8px;
           color: var(--muted);
           font-size: 14px;
           line-height: 1.5;
+        }
+        .cos-disclosure {
+          background: none;
+          border: none;
+          padding: 0;
+          margin-bottom: 20px;
+          color: var(--accent-strong);
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+        }
+        .cos-disclosure:hover {
+          text-decoration: underline;
+        }
+        .cos-about {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          padding: 18px 20px;
+          margin-bottom: 12px;
+          font-size: 13px;
+          line-height: 1.55;
+        }
+        .cos-about-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 24px;
+        }
+        .cos-about h3 {
+          margin: 0 0 8px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: var(--muted);
+        }
+        .cos-about ol,
+        .cos-about ul {
+          margin: 0;
+          padding-left: 18px;
+        }
+        .cos-about li {
+          margin-bottom: 4px;
+        }
+        .cos-about p {
+          margin: 0;
+        }
+        .cos-about code {
+          font-family: ui-monospace, "SF Mono", Menlo, monospace;
+          font-size: 12px;
+          background: var(--surface-muted);
+          padding: 1px 5px;
+          border-radius: 3px;
+        }
+        .cos-about-status {
+          margin-top: 18px;
+          padding-top: 14px;
+          border-top: 1px solid var(--border);
+        }
+        .cos-about-status dl {
+          display: grid;
+          grid-template-columns: max-content 1fr;
+          gap: 4px 16px;
+          margin: 0;
+        }
+        .cos-about-status dl > div {
+          display: contents;
+        }
+        .cos-about-status dt {
+          color: var(--ink);
+          font-weight: 600;
+          font-size: 12px;
+          white-space: nowrap;
+        }
+        .cos-about-status dd {
+          margin: 0;
+          color: var(--muted);
+          font-size: 12px;
+        }
+        .cos-field-meta {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-top: 4px;
+        }
+        .cos-disclosure-inline {
+          background: none;
+          border: none;
+          padding: 0;
+          color: var(--accent-strong);
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+        }
+        .cos-disclosure-inline:hover {
+          text-decoration: underline;
+        }
+        .cos-field-hint {
+          color: var(--muted);
+          font-size: 12px;
+        }
+        .cos-json-view {
+          margin: 0 0 14px;
+          padding: 10px 12px;
+          background: var(--bg);
+          border: 1px solid var(--border);
+          border-radius: 8px;
+          font-size: 12px;
+        }
+        .cos-json-view summary {
+          cursor: pointer;
+          color: var(--muted);
+          font-weight: 600;
+          letter-spacing: 0.02em;
+          text-transform: uppercase;
+          font-size: 11px;
+          margin-bottom: 8px;
+        }
+        .cos-json-textarea {
+          font-family: ui-monospace, "SF Mono", Menlo, monospace;
+          font-size: 12px;
+          line-height: 1.45;
+          width: 100%;
+          margin-top: 6px;
+          padding: 10px;
+          border: 1px solid var(--border);
+          border-radius: 6px;
+          background: var(--surface);
+          resize: vertical;
         }
         .cos-form,
         .cos-brief {

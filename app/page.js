@@ -49,6 +49,7 @@ function createSpec(pattern) {
     permissions: clone(source.permissions),
     evals: clone(source.evals),
     learning: clone(source.learning),
+    modelProfiles: clone(source.modelProfiles),
     sources: clone(source.sources),
   };
 }

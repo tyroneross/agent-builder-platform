@@ -4,6 +4,7 @@ out/
 dist/
 coverage/
 generated/
+.tmp/
 .env*
 !.env.example
 npm-debug.log*
@@ -16,6 +17,12 @@ yarn-error.log*
 
 # Local Chief of Staff agent runs
 runs/
+
+# Build-loop runtime state (per-build evals, plan, goal, state.json)
+.build-loop/
+
+# Bookmark/build-loop state inside generated agent output samples
+agent-outputs/**/.claude/
 
 # >>> NavGator safety guard (auto-managed)
 # These files are regenerated from .env on every NavGator scan and contain

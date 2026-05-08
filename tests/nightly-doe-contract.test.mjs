@@ -3,7 +3,7 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 import test from "node:test";
 
-const contractPath = join(process.cwd(), "references", "templates", "nightly-doe-contract.json");
+const contractPath = join(process.cwd(), "plugin", "references", "templates", "nightly-doe-contract.json");
 
 test("nightly DOE contract stays design-only and read-only by default", async () => {
   const contract = JSON.parse(await readFile(contractPath, "utf8"));

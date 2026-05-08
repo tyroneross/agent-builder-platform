@@ -5,11 +5,12 @@ export const maxDuration = 1800;
 
 export async function POST(request) {
   const body = await request.json().catch(() => ({}));
-  const { model, schedule, goals } = body ?? {};
+  const { model, schedule, goals, allowCloud, maxCloudTokens } = body ?? {};
 
-  if (!model) {
-    return Response.json({ ok: false, error: "model required" }, { status: 400 });
-  }
+  // `model` may be omitted to use the per-node cascade defaults. When it IS
+  // provided, we collapse the cascade to a single user-override step so the
+  // legacy "pick this exact ollama model" behavior is preserved.
+  const modelOverride = model ? { provider: "ollama", model } : null;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -24,6 +25,9 @@ export async function POST(request) {
           schedule,
           goals,
           onEvent: send,
+          modelOverride,
+          allowCloud,
+          maxCloudTokens,
         });
       } catch (err) {
         send({ type: "fatal", error: err?.message ?? String(err) });

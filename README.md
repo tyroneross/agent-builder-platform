@@ -80,7 +80,7 @@ npm run agent:doe
 npm run agents:artifacts:doe
 ```
 
-The scan can run from the terminal or through the UI's **Agent structures** section. Current structures include Chief of Staff, PowerPoint Deck Builder, Writing, App Builder, Research Brief, Code Review, and Data Analysis agents. The terminal scan reports graph shape, tool/eval counts, research-alignment checks, and optional sandbox e2e results.
+The scan can run from the terminal or through the UI's **Agent structures** section. Current structures include Chief of Staff, PowerPoint Deck Builder, Writing, App Builder, Research Brief, Code Review, Earnings Webex Draft, and Data Analysis agents. The terminal scan reports graph shape, tool/eval counts, research-alignment checks, and optional sandbox e2e results.
 
 Each structure now includes an eval-gated domain-learning layer:
 

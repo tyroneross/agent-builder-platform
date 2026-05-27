@@ -1,7 +1,7 @@
 {
   "name": "agent-builder",
   "displayName": "Agent Builder Plugin Companion",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Standalone companion skill for designing and evaluating agentic harnesses without installing the Agent Builder app.",
   "productRole": "plugin-companion",
   "companionFor": {

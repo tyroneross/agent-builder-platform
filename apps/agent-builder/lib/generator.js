@@ -8,6 +8,10 @@ import {
 // single source of truth across the monorepo. Re-exported below for back-compat
 // with this app's existing importers (tests, app/page.js, build-files.js).
 import { slugify, validateSpec, toYaml } from "@tyroneross/agent-spec";
+import {
+  resolveEmittedCapabilities,
+  buildComponentModelSection,
+} from "./emitted-capabilities/index.mjs";
 
 export { slugify, validateSpec, toYaml };
 
@@ -238,11 +242,11 @@ function buildModelProfilePromptSection(spec) {
 `;
 }
 
-function buildTools(spec) {
+function buildTools(spec, emittedTools = []) {
   return {
     schemaVersion: "agent-builder.tools.v1",
     policy: spec.permissions,
-    tools: spec.tools.map((tool) => ({
+    tools: [...spec.tools, ...emittedTools].map((tool) => ({
       name: tool.name,
       responsibility: tool.responsibility,
       sideEffect: tool.sideEffect,
@@ -268,7 +272,7 @@ function nodeSkillId(manifest, node) {
   return `${manifest.slug}-${slugify(node.id)}-skill`;
 }
 
-function buildSkillBank(spec, manifest) {
+function buildSkillBank(spec, manifest, emittedSkills = []) {
   const nodeSkills = spec.nodes.map((node) => ({
     id: nodeSkillId(manifest, node),
     type: "graph-node",
@@ -308,6 +312,7 @@ function buildSkillBank(spec, manifest) {
         requiredFiles: ["system-prompt.md", "manifest.json", "agent.yaml", "tools.json", "context/input-contract.md"],
       },
       ...nodeSkills,
+      ...emittedSkills,
     ],
     chains: (spec.edges ?? []).map((edge) => ({
       id: `${slugify(edge.from)}-to-${slugify(edge.to)}`,
@@ -379,7 +384,8 @@ Every chain handoff must include:
 2. Wrap the skill when adding host-specific permissions, output formatting, logging, or approval gates.
 3. Fork the skill when the owner, permission tier, eval gate, or durable memory store changes.
 4. Keep skill changes paired with \`evals/golden-tasks.json\` updates when behavior changes.
-`;
+
+${buildComponentModelSection()}`;
 }
 
 function buildHostDeploymentMarkdown(spec, manifest) {
@@ -559,7 +565,7 @@ function buildAgentPackageManifest(spec, manifest) {
   };
 }
 
-function buildPortablePackageJson(spec, manifest) {
+function buildPortablePackageJson(spec, manifest, emittedDependencies = {}) {
   return {
     name: `agent-builder-${manifest.slug}`,
     version: "0.0.0",
@@ -571,6 +577,7 @@ function buildPortablePackageJson(spec, manifest) {
       "runtime:check": "node runtime/custom-loop-adapter.mjs --fixture",
       validate: "node scripts/setup-check.mjs",
     },
+    ...(Object.keys(emittedDependencies).length ? { dependencies: emittedDependencies } : {}),
   };
 }
 
@@ -1121,6 +1128,10 @@ export function buildAgentArtifacts(input, options = {}) {
 
   const createdAt = options.createdAt ?? new Date().toISOString();
   const manifest = buildManifest(spec, createdAt);
+  // Conditional capabilities (doc-ingest / threat-modeler / pyramid-principle)
+  // resolved from the spec — one canonical surface each, emitted only when
+  // the spec warrants it (no decorative slots).
+  const emitted = resolveEmittedCapabilities(spec, manifest);
   const agentConfig = {
     schemaVersion: "agent-builder.agent.v1",
     name: spec.projectName,
@@ -1153,16 +1164,16 @@ export function buildAgentArtifacts(input, options = {}) {
 
   const files = [
     { path: "agent-package.json", content: `${JSON.stringify(buildAgentPackageManifest(spec, manifest), null, 2)}\n` },
-    { path: "package.json", content: `${JSON.stringify(buildPortablePackageJson(spec, manifest), null, 2)}\n` },
+    { path: "package.json", content: `${JSON.stringify(buildPortablePackageJson(spec, manifest, emitted.dependencies), null, 2)}\n` },
     { path: "agent.yaml", content: `${toYaml(agentConfig)}\n` },
     { path: "manifest.json", content: `${JSON.stringify(manifest, null, 2)}\n` },
     { path: "INSTALL.md", content: buildInstallMarkdown(spec, manifest) },
     { path: "system-prompt.md", content: buildSystemPrompt(spec) },
     { path: "prompts/prompt-builder-contract.md", content: buildPromptBuilderContract(spec, { frameworkLabel }) },
-    { path: "skills/skill-bank.json", content: `${JSON.stringify(buildSkillBank(spec, manifest), null, 2)}\n` },
+    { path: "skills/skill-bank.json", content: `${JSON.stringify(buildSkillBank(spec, manifest, emitted.skills), null, 2)}\n` },
     { path: "skills/skill-contract.md", content: buildSkillContractMarkdown(spec, manifest) },
     { path: "context/input-contract.md", content: buildInputContractMarkdown(spec) },
-    { path: "tools.json", content: `${JSON.stringify(buildTools(spec), null, 2)}\n` },
+    { path: "tools.json", content: `${JSON.stringify(buildTools(spec, emitted.tools), null, 2)}\n` },
     { path: "setup/requirements.json", content: `${JSON.stringify(buildSetupRequirements(spec, manifest), null, 2)}\n` },
     { path: "setup/env.example", content: buildEnvExample(spec) },
     { path: "setup/install-checklist.md", content: buildInstallChecklist(spec, manifest) },
@@ -1183,6 +1194,7 @@ export function buildAgentArtifacts(input, options = {}) {
     { path: "memory/learning-ledger.json", content: `${JSON.stringify(buildLearningLedger(spec, createdAt), null, 2)}\n` },
     { path: "README.md", content: buildReadme(spec, manifest) },
     { path: "sources.md", content: buildSourcesMarkdown(spec) },
+    ...emitted.files,
   ];
 
   return {
@@ -1190,6 +1202,7 @@ export function buildAgentArtifacts(input, options = {}) {
     spec,
     files,
     warnings: buildWarnings(spec),
+    emitted: emitted.summary,
   };
 }
 

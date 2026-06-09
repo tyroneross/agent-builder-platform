@@ -9,6 +9,11 @@ export const PERMITTED_UPLOAD_EXTENSIONS = [
   ".yaml",
   ".yml",
   ".csv",
+  // Document formats — parsed to LLM-ready text server-side via
+  // @tyroneross/omniparse (app/lib/doc-ingest.mjs) when a run loads them.
+  ".pdf",
+  ".xlsx",
+  ".pptx",
 ];
 
 // Suitable for <input type="file" accept="...">. Comma-separated list with the

@@ -7,16 +7,18 @@
     "dev": "next dev --webpack -p 3030",
     "build": "next build",
     "start": "next start -p 3030",
-    "test:self": "node scripts/test-self.mjs && node scripts/test-roundtrip.mjs && node scripts/test-no-hardcoded-storage.mjs",
+    "test:self": "node scripts/test-self.mjs && node scripts/test-roundtrip.mjs && node scripts/test-no-hardcoded-storage.mjs && node scripts/test-doc-ingest.mjs",
     "test:roundtrip": "node scripts/test-roundtrip.mjs",
-    "test:no-hardcoded-storage": "node scripts/test-no-hardcoded-storage.mjs"
+    "test:no-hardcoded-storage": "node scripts/test-no-hardcoded-storage.mjs",
+    "test:doc-ingest": "node scripts/test-doc-ingest.mjs"
   },
   "dependencies": {
+    "@tyroneross/agent-spec": "*",
+    "@tyroneross/local-llm": "*",
+    "@tyroneross/omniparse": "^1.0.0",
     "next": "^16.2.4",
     "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "@tyroneross/agent-spec": "*",
-    "@tyroneross/local-llm": "*"
+    "react-dom": "^19.2.5"
   },
   "overrides": {
     "postcss": "^8.5.12"

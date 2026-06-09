@@ -22,7 +22,14 @@ test("slugify returns a safe stable folder name", () => {
 test("all bundled patterns generate the core artifact set", () => {
   for (const pattern of PATTERNS) {
     const result = buildAgentArtifacts({ patternId: pattern.id, projectName: pattern.name }, { createdAt: "test" });
-    const paths = result.files.map((file) => file.path).sort();
+    // Conditional emitted capabilities (doc-ingest / threat-modeler /
+    // pyramid-principle) vary by spec; this test pins the CORE set.
+    const CONDITIONAL = new Set([
+      "runtime/doc-ingest.mjs",
+      "skills/threat-modeler.skill.md",
+      "skills/pyramid-principle.skill.md",
+    ]);
+    const paths = result.files.map((file) => file.path).filter((p) => !CONDITIONAL.has(p)).sort();
     assert.deepEqual(paths, [
       "INSTALL.md",
       "README.md",

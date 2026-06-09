@@ -1,3 +1,5 @@
+import { buildPromptingLadderSection } from "./emitted-capabilities/prompting-patterns.mjs";
+
 export const PROMPT_BUILDER_SOURCE_IDS = [
   "prompt-builder-caller-contract",
   "prompt-builder-deployment-modules",
@@ -144,6 +146,7 @@ When Agent Builder emits a skill or plugin surface, its prompt should add:
 - Examples: at least one positive example; add edge-case examples for smaller/local models.
 - Validation: tests, lint, smoke run, source freshness, and secret-safety checks.
 
+${buildPromptingLadderSection()}
 ## Provider-Specific Prompt Notes
 
 - OpenAI: use clear, specific prompts with enough context; for reasoning models keep prompts direct, avoid unnecessary chain-of-thought requests, and use delimiters/section titles for clarity.

@@ -21,6 +21,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { runProject, planExecution } from "../../../lib/agent-runtime.mjs";
+import { readUploadAsText } from "../../../lib/doc-ingest.mjs";
 import {
   registerStepController,
   disposeController,
@@ -41,6 +42,9 @@ const PERMITTED_UPLOAD_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
   ".csv",
+  ".pdf",
+  ".xlsx",
+  ".pptx",
 ]);
 
 // Pass 11: total byte cap across ALL inlined upload contents combined. Sized
@@ -140,7 +144,9 @@ async function loadUploadContents(project, emit) {
 
     let contents;
     try {
-      contents = await fs.readFile(abs, "utf8");
+      // Binary docs (.pdf/.xlsx/.pptx) come back as omniparse markdown;
+      // text formats keep the raw utf8 read. Same byte budget either way.
+      ({ contents } = await readUploadAsText(abs));
     } catch (err) {
       emit({
         type: "warning",

@@ -31,6 +31,9 @@ const PERMITTED_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
   ".csv",
+  ".pdf",
+  ".xlsx",
+  ".pptx",
 ]);
 const MAX_BYTES = 10 * 1024 * 1024;
 

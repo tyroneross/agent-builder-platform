@@ -27,6 +27,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { runProject, planExecution } from "../../../lib/agent-runtime.mjs";
+import { readUploadAsText } from "../../../lib/doc-ingest.mjs";
 import {
   DEFAULT_STORAGE_CONFIG,
   truncateOutputForCache,
@@ -46,6 +47,9 @@ const PERMITTED_UPLOAD_EXTENSIONS = new Set([
   ".yaml",
   ".yml",
   ".csv",
+  ".pdf",
+  ".xlsx",
+  ".pptx",
 ]);
 const UPLOAD_BYTE_BUDGET = 64 * 1024;
 
@@ -105,7 +109,8 @@ async function loadUploadContents(project, emit) {
     }
     let contents;
     try {
-      contents = await fs.readFile(abs, "utf8");
+      // Binary docs (.pdf/.xlsx/.pptx) -> omniparse markdown; text -> raw utf8.
+      ({ contents } = await readUploadAsText(abs));
     } catch (err) {
       emit({ type: "warning", text: `upload "${name}" could not be read: ${err?.message || "read failed"}` });
       continue;

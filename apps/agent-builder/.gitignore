@@ -1,0 +1,48 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+generated/
+.tmp/
+.env*
+!.env.example
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Bookmark snapshot data
+.claude/bookmarks/
+
+# Local Chief of Staff agent runs
+runs/
+# Stray telemetry from runs invoked at repo root (without --out)
+telemetry.jsonl
+
+# Build-loop runtime state (per-build evals, plan, goal, state.json)
+.build-loop/
+
+# Bookmark/build-loop state inside generated agent output samples
+agent-outputs/**/.claude/
+
+# >>> NavGator safety guard (auto-managed)
+# These files are regenerated from .env on every NavGator scan and contain
+# parsed hostnames/endpoints from your live environment. Credentials are
+# stripped by NavGator, but hostnames/project refs still leak infra identity.
+# Safe to delete this block if you want the files tracked — NavGator will
+# not re-add it while the markers below are missing.
+.navgator/architecture/components/COMP_config_*.json
+.navgator/architecture/NAVSUMMARY.md
+.navgator/architecture/NAVSUMMARY_FULL.md
+.navgator/architecture/SUMMARY.md
+.navgator/architecture/SUMMARY_FULL.md
+# <<< NavGator safety guard
+
+# Local cleanup archives
+.archive/
+.bookmark/
+.claude-code-debugger/
+
+# Agent Rally Point coordination scratch (not version-controlled)
+.rally/

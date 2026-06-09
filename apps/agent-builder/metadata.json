@@ -1,0 +1,64 @@
+{
+  "name": "Agent Builder",
+  "description": "Local app/workbench for designing, evaluating, packaging, and reusing agentic harnesses, with a standalone plugin companion bundled under plugin/ for Claude/Codex-style hosts.",
+  "category": "apps",
+  "product_type": "local-app-workbench",
+  "plugin_companion": {
+    "path": "plugin/",
+    "standalone": true,
+    "bundled_with_app_repository": true,
+    "entrypoint": "plugin/SKILL.md",
+    "metadata": "plugin/metadata.json"
+  },
+  "author": {
+    "name": "Tyrone Ross",
+    "github": "tyroneross",
+    "email": "tyrone@rosslabs.ai"
+  },
+  "version": "0.3.1",
+  "license": "Apache-2.0",
+  "requires": {
+    "services": [],
+    "tools": ["Node.js", "npm", "AI client with reusable skills/prompts for the optional plugin companion"]
+  },
+  "tags": [
+    "agentic-harness",
+    "agents",
+    "architecture",
+    "evaluation",
+    "memory",
+    "observability",
+    "frameworks",
+    "multi-agent",
+    "local-models",
+    "open-source",
+    "workflow",
+    "permissions",
+    "skills",
+    "skill-bank",
+    "codex",
+    "claude",
+    "deployment"
+  ],
+  "difficulty": "advanced",
+  "estimated_time": "15 minutes",
+  "created": "2026-04-05",
+  "updated": "2026-06-09",
+  "attribution": {
+    "external_reference": {
+      "skill": "n-agentic-harnesses",
+      "author": "Jonathan Edwards",
+      "author_github": "jonathanedwards",
+      "repo_owner": "Nate B Jones",
+      "repo": "https://github.com/NateBJones-Projects/OB1/tree/main/skills/n-agentic-harnesses",
+      "scope": "external inspiration/reference only; no source files from this skill are bundled"
+    },
+    "catalog_source": {
+      "name": "RossLabs.ai agentic AI architectures research corpus",
+      "author": "Tyrone Ross",
+      "date": "April 2026",
+      "source_count": 368,
+      "scope": "plugin/references/catalog files 1-6 are derived from this corpus; files 7-10 add local operational, repo/skill, and host-deployment synthesis"
+    }
+  }
+}

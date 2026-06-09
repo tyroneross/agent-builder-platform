@@ -1,0 +1,54 @@
+{
+  "name": "@tyroneross/agent-builder",
+  "version": "0.3.1",
+  "description": "Standalone plugin companion for designing, evaluating, packaging, and deploying agentic harnesses with repo structure, reusable skills, skill banks, and cross-host contracts",
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Tyrone Ross, Jr",
+    "email": "46267523+tyroneross@users.noreply.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tyroneross/agent-builder.git",
+    "directory": "plugin"
+  },
+  "homepage": "https://github.com/tyroneross/agent-builder/tree/main/plugin",
+  "private": false,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "metadata.json",
+    ".claude-plugin",
+    ".codex-plugin",
+    "examples",
+    "references"
+  ],
+  "keywords": [
+    "agent",
+    "harness",
+    "architecture",
+    "design",
+    "evaluation",
+    "multi-agent",
+    "tools",
+    "permissions",
+    "memory",
+    "observability",
+    "langgraph",
+    "crewai",
+    "pydantic-ai",
+    "smolagents",
+    "dspy",
+    "autogen",
+    "skills",
+    "skill-bank",
+    "plugins",
+    "codex",
+    "claude",
+    "deployment"
+  ]
+}

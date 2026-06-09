@@ -1,0 +1,46 @@
+{
+  "name": "agent-builder",
+  "displayName": "Agent Builder Plugin Companion",
+  "version": "0.3.1",
+  "description": "Standalone companion skill for designing, evaluating, packaging, and deploying agentic harnesses without installing the Agent Builder app.",
+  "productRole": "plugin-companion",
+  "companionFor": {
+    "name": "Agent Builder App",
+    "repository": "https://github.com/tyroneross/agent-builder"
+  },
+  "entrypoint": "SKILL.md",
+  "manifests": {
+    "claude": ".claude-plugin/plugin.json",
+    "codex": ".codex-plugin/plugin.json"
+  },
+  "standalone": true,
+  "bundledWithAppRepository": true,
+  "requiredPaths": [
+    "SKILL.md",
+    "README.md",
+    "examples",
+    "references",
+    "references/catalog/07-local-operational-patterns.md",
+    "references/catalog/08-repo-skill-architecture.md",
+    "references/catalog/09-skill-bank-and-chaining.md",
+    "references/catalog/10-cross-host-deployment.md",
+    "references/templates/agentic-handoff/skill-contract.md",
+    ".claude-plugin/plugin.json",
+    ".codex-plugin/plugin.json"
+  ],
+  "excludedAppPaths": [
+    "app",
+    "lib",
+    "scripts",
+    "sandbox",
+    "tests",
+    "generated",
+    "agent-outputs",
+    "node_modules"
+  ],
+  "license": "Apache-2.0",
+  "author": {
+    "name": "Tyrone Ross",
+    "github": "tyroneross"
+  }
+}

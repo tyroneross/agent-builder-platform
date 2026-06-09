@@ -22,5 +22,14 @@
       "source": "/private/tmp/chief-of-staff-scan after refactor"
     }
   },
-  "completedPhases": ["assess", "define", "plan", "execute", "validate", "report"]
+  "completedPhases": [
+    "assess",
+    "define",
+    "plan",
+    "execute",
+    "validate",
+    "report"
+  ],
+  "runs": [],
+  "schema_version": "1.0.0"
 }

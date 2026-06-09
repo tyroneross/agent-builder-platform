@@ -16,3 +16,8 @@ cos-workspace/
 .navgator/architecture/SUMMARY.md
 .navgator/architecture/SUMMARY_FULL.md
 # <<< NavGator safety guard
+
+# Tool scratch (not version-controlled)
+.navgator/
+.rally/
+.build-loop/state.json.bak.*

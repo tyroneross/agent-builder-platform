@@ -16,6 +16,10 @@ agent_manifest:
   autonomy_level:                 # see methodology/13 §autonomy ladder
   architecture_pattern:           # single | router | sequential | parallel | orchestrator-worker | evaluator-optimizer | multi-agent handoff | custom graph
   sdk_choice:                     # direct API | OpenAI Agents SDK | LangGraph | custom
+  deployment_modes:               # api-key runtime | claude-native | codex-native | host-agnostic | hybrid
+    - "<mode>"
+  repo_layout:                    # api-first | host-native | hybrid
+    source_of_truth: "<runtime | plugin | contracts>"
   model_routes:
     router:
     planner:
@@ -29,6 +33,26 @@ agent_manifest:
     working_state:
     session_memory:
     long_term_memory:
+  skills:
+    bank:
+      - skill_id:
+        purpose:
+        host_support:
+        chain_position:
+    chaining_policy:
+      allowed_patterns:
+        - "sequential | router | parallel-specialist | generator-critic | runtime-repair"
+      termination_condition:
+  host_surfaces:
+    api:
+      env_contract:
+      runtime_entrypoint:
+    claude:
+      manifest:
+      skill_root:
+    codex:
+      manifest:
+      skill_root:
   protocols:
     mcp:
     a2a:
@@ -80,6 +104,7 @@ agents:
 - The manifest is versioned. Bump the version on any change that affects allowed tools, autonomy levels, model routes, guardrails, or human checkpoints.
 - Every agent in the `agents:` block must have a corresponding [role card](role-card.md).
 - Every tool in the `tools:` block must have a corresponding [tool contract](tool-contract.md).
+- Every reusable skill in the `skills.bank:` block must have a corresponding [skill contract](skill-contract.md).
 - Every guardrail entry must have a corresponding [guardrail definition](guardrail.md).
 - The manifest is the contract a coding agent reads before building. If something is in the manifest but not implemented, that is a defect; if something is implemented but not in the manifest, that is a governance gap.
 

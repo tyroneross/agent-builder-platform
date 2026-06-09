@@ -168,4 +168,4 @@ Start here: Are you building a local agent?
 
 ---
 
-*Catalog file 06/06 · local and open-source model guidance · April 2026*
+*Catalog file 06/10 · local and open-source model guidance · April 2026*

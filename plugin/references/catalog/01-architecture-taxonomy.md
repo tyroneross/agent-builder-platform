@@ -154,4 +154,4 @@ Seven recurring patterns across all architectures:
 
 ---
 
-*Catalog file 01/05 · derived from RossLabs agentic architectures research corpus · April 2026*
+*Catalog file 01/10 · derived from RossLabs agentic architectures research corpus · April 2026*

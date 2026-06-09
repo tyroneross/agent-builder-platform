@@ -15,7 +15,7 @@
     "github": "tyroneross",
     "email": "tyrone@rosslabs.ai"
   },
-  "version": "0.3.0",
+  "version": "0.3.1",
   "license": "Apache-2.0",
   "requires": {
     "services": [],
@@ -33,12 +33,17 @@
     "local-models",
     "open-source",
     "workflow",
-    "permissions"
+    "permissions",
+    "skills",
+    "skill-bank",
+    "codex",
+    "claude",
+    "deployment"
   ],
   "difficulty": "advanced",
   "estimated_time": "15 minutes",
   "created": "2026-04-05",
-  "updated": "2026-05-16",
+  "updated": "2026-06-09",
   "attribution": {
     "external_reference": {
       "skill": "n-agentic-harnesses",
@@ -53,7 +58,7 @@
       "author": "Tyrone Ross",
       "date": "April 2026",
       "source_count": 368,
-      "scope": "plugin/references/catalog/ 1-6 are derived from this corpus"
+      "scope": "plugin/references/catalog files 1-6 are derived from this corpus; files 7-10 add local operational, repo/skill, and host-deployment synthesis"
     }
   }
 }

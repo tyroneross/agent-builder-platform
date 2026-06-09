@@ -11,6 +11,7 @@ Reusable schemas for product-development agent systems — the wire format betwe
 | [agent-output-contract.md](agent-output-contract.md) | Structured output every agent emits when a task ends. |
 | [artifact-version.md](artifact-version.md) | Version header on every artifact (requirements, UX, architecture, data, tests, code, risk). |
 | [tool-contract.md](tool-contract.md) | Per-tool schema: input/output, permission tier (T0–T5), side effects, approval, audit, rollback, failure modes. Canonical merge of Perplexity + ChatGPT shapes. |
+| [skill-contract.md](skill-contract.md) | Per-skill schema: trigger conditions, context loading, inputs/outputs, references, scripts, chaining, validation, modification policy. |
 | [guardrail.md](guardrail.md) | Per-guardrail definition: trigger, check, action, severity, escalation. Includes the OWASP-aligned risk control matrix. |
 | [assumption-log.md](assumption-log.md) | One entry per inference the agent system makes, with confidence, impact-if-wrong, reversibility, validation path. |
 | [traceability-matrix.md](traceability-matrix.md) | Need → story → requirement → UX → entity → test → status. Owned by the QA / Evaluation agent. |

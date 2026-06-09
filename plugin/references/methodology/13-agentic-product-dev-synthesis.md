@@ -7,7 +7,7 @@
 > - `~/dev/research/topics/product-dev/product-dev.agentic-systems-template-pack-addendum-v2.md` — **canonical Perplexity addendum (v2)**, with cross-source merge against the ChatGPT addendum, A0–A4 autonomy ladder, and the new `system_boundary` / `flow_topology` schemas.
 > - `~/dev/research/topics/product-dev/product-dev.agentic-systems-template-pack-addendum.md` — Perplexity v1 (retained for traceability; superseded by v2).
 > - `~/dev/research/topics/product-dev/product-dev.agentic-systems-design-chatgpt.md` — full ChatGPT addendum.
-> - `references/templates/agentic-handoff/` — 15 reusable schemas extracted from the addenda.
+> - `references/templates/agentic-handoff/` — reusable schemas extracted from the addenda.
 
 ## Table of contents
 

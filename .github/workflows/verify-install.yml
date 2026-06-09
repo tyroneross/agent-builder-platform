@@ -67,8 +67,24 @@ jobs:
           fi
 
           # Plugin companion content should ship: SKILL.md, both manifests,
-          # examples, references, and the companion README + metadata.
-          for required in SKILL.md README.md metadata.json .claude-plugin/plugin.json .codex-plugin/plugin.json examples references; do
+          # examples, references, and the companion README + metadata. Keep
+          # the high-leverage catalog/template paths explicit so release checks
+          # catch packaging regressions in the portable skill surface.
+          required_paths=(
+            SKILL.md
+            README.md
+            metadata.json
+            .claude-plugin/plugin.json
+            .codex-plugin/plugin.json
+            examples
+            references
+            references/catalog/07-local-operational-patterns.md
+            references/catalog/08-repo-skill-architecture.md
+            references/catalog/09-skill-bank-and-chaining.md
+            references/catalog/10-cross-host-deployment.md
+            references/templates/agentic-handoff/skill-contract.md
+          )
+          for required in "${required_paths[@]}"; do
             if [ ! -e "node_modules/@tyroneross/agent-builder/$required" ]; then
               echo "::error::Missing from installed package: $required"
               exit 1

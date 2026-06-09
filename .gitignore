@@ -43,3 +43,6 @@ agent-outputs/**/.claude/
 .archive/
 .bookmark/
 .claude-code-debugger/
+
+# Agent Rally Point coordination scratch (not version-controlled)
+.rally/

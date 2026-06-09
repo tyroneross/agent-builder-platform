@@ -18,6 +18,8 @@ Plain-text files in the working directory are the dominant memory substrate in p
 **Strengths:** Human-readable, version-controllable, survives context compression. File paths act as durable pointers even after summarization.
 **Insight:** "Filesystem IS the external cognition layer"
 
+**Operational contract:** Treat files as the source of truth only when the write path is governed. Production-style filesystem memory needs stable lanes, a canonical writer, provenance metadata, validation, generated indexes, and a promotion boundary between raw observations, candidates, and durable lessons/decisions. See `07-local-operational-patterns.md` sections 1-3.
+
 ### 2. Vector DB + Metadata (Embeddings + JSON)
 **Systems:** Voyager (ChromaDB), CrewAI (LanceDB), LangGraph (BaseStore)
 **Format:** Embeddings with JSON metadata and timestamps
@@ -187,12 +189,30 @@ Four distinct approaches to agents that improve their own performance:
 What kind of data?
 ├── User preferences, small settings → @AppStorage / env vars
 ├── Session state, task progress → Filesystem (.md files)
+├── Cross-repo decisions and lessons → Filesystem lanes + canonical writer + validation
+├── Raw evidence and scan output → Raw/source mirror, not durable memory
+├── Candidate observations → Review queue before promotion
 ├── Growing knowledge base → Vector DB (embeddings)
 ├── Conversation history → In-context (bounded) or checkpoint store
 ├── Compiled optimizations → JSON (DSPy format)
 ├── Structured facts → Entity memory (key-value + metadata)
 └── Procedural directives → Config files (CLAUDE.md, rules/*.md)
 ```
+
+## Promotion Hygiene
+
+Durable memory should preserve decisions, lessons, RCAs, validated architecture/security contracts, reusable procedures, and cross-repo patterns. It should usually exclude raw logs, screenshots, dated handoffs, transient queues, generated indexes, and local run artifacts unless a later review promotes them.
+
+For each promoted memory item, record:
+
+- source repo/workdir
+- source run or evidence artifact
+- created/updated timestamps
+- confidence or validation state
+- applied-in-repos list when reused
+- supersession or rejection path
+
+This keeps memory useful as an agent substrate instead of becoming an unbounded transcript archive.
 
 ---
 

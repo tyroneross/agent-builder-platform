@@ -1,7 +1,7 @@
 {
   "name": "agent-builder",
   "version": "0.3.1",
-  "description": "Standalone plugin companion for designing and evaluating agentic harnesses with research synthesis, prompt contracts, and an architecture catalog",
+  "description": "Standalone plugin companion for designing, evaluating, packaging, and deploying agentic harnesses with repo structure, reusable skills, skill banks, and cross-host contracts",
   "author": { "name": "Tyrone Ross" },
   "homepage": "https://github.com/tyroneross/agent-builder/tree/main/plugin",
   "repository": "https://github.com/tyroneross/agent-builder",
@@ -24,6 +24,12 @@
     "pydantic-ai",
     "smolagents",
     "dspy",
-    "autogen"
+    "autogen",
+    "skills",
+    "skill-bank",
+    "plugins",
+    "codex",
+    "claude",
+    "deployment"
   ]
 }

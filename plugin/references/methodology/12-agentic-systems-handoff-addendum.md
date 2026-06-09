@@ -6,7 +6,7 @@
 > - `13-agentic-product-dev-synthesis.md` — the cross-source merge of this addendum with the ChatGPT addendum, plus mapping onto Agent Builder's catalog, templates, prompt contracts, and generated artifacts.
 > - `~/dev/research/topics/product-dev/product-dev.agentic-systems-template-pack-addendum-v2.md` — **Perplexity v2 (supersedes this addendum's source)**: revised A0–A4 autonomy ladder, cross-source merge with ChatGPT, default agent role decomposition, staged implementation, operational thresholds, and the new `system_boundary` and `flow_topology` schemas.
 > - `~/dev/research/topics/product-dev/product-dev.agentic-systems-design-chatgpt.md` — the ChatGPT-sourced companion addendum (multi-agent role decomposition, handoff envelope, autonomy levels, evaluation scorecard, operational metrics).
-> - `references/templates/agentic-handoff/` — 15 reusable schemas (role cards, handoff envelopes, tool contracts, guardrails, traceability matrix, agent manifest, eval scorecard, spec-lint, ADR, human checkpoints, system boundary, flow topology) synthesized from the research addenda.
+> - `references/templates/agentic-handoff/` — reusable schemas (role cards, handoff envelopes, tool contracts, skill contracts, guardrails, traceability matrix, agent manifest, eval scorecard, spec-lint, ADR, human checkpoints, system boundary, flow topology) synthesized from the research addenda.
 
 ## Executive summary
 

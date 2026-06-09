@@ -13,6 +13,11 @@ spec_lint:
   architecture_decisions_have_rationale: true
   non_goals_defined: true
   agent_decision_boundaries_defined: true
+  repo_layout_matches_deployment_mode: true
+  skill_bank_entries_have_contracts: true
+  skill_chains_have_io_and_stop_conditions: true
+  host_manifests_reference_existing_skill_roots: true
+  api_key_contract_has_fixture_or_offline_path: true
   unresolved_low_reversibility_decisions: false
 ```
 

@@ -12,6 +12,8 @@
 | Architecture fit | Over/under-built | Some fit | Good fit | Clear, reversible, justified |
 | Security posture | Unsafe | Gaps | Acceptable | Strong controls |
 | Test coverage | Minimal | Some P0 | Most P0 | Full P0 + failure modes |
+| Skill-bank readiness | Missing | Informal skill list | Contracts for core skills | Reusable bank with triggers, chaining, validation |
+| Deployment readiness | No runnable target | One target unclear | Primary target runnable | API/host package boundaries clear and validated |
 | Agent handoff readiness | Not buildable | Needs questions | Buildable with assumptions | Ready for coding agent |
 
 ## Decision rule

@@ -33,11 +33,15 @@ The marketplace install points at `path: plugin` inside this repo. The `plugin/.
 | `references/catalog/04-memory-substrates.md` | Filesystem-as-memory, vector DB, in-context, COALA, self-improvement patterns |
 | `references/catalog/05-lab-patterns.md` | Production patterns from Anthropic, OpenAI, Perplexity, Manus, Google, Devin, Cursor |
 | `references/catalog/06-local-and-open-source-models.md` | Constraints and patterns for Ollama/llama.cpp/vLLM agents — tool-call tiers, failure modes |
+| `references/catalog/07-local-operational-patterns.md` | Local repo scan takeaways — memory promotion, receipts/readback, daemon-owned truth, freshness, proxy eval gates |
+| `references/catalog/08-repo-skill-architecture.md` | Repo shapes, skill anatomy, skill capture/modification workflow, build-ready artifact checklist |
+| `references/catalog/09-skill-bank-and-chaining.md` | Structured skill bank, skill chaining patterns, plug-and-play skill slots, modify/wrap/fork decisions |
+| `references/catalog/10-cross-host-deployment.md` | API-key runtime, Claude-native, Codex-native, host-agnostic, hybrid deployment and collaboration contracts |
 | `references/methodology/12-agentic-systems-handoff-addendum.md` | Autonomy boundaries, tool permission tiers (T0–T5), MCP/A2A guidance, OWASP/NIST safety |
 | `references/methodology/13-agentic-product-dev-synthesis.md` | Product-development agent systems: workflow-first, A0–A4 autonomy ladder, eval gates |
 | `references/templates/design-deliverable.md` | Output shape for design mode |
 | `references/templates/evaluation-deliverable.md` | Output shape for evaluation mode |
-| `references/templates/agentic-handoff/` | 15 reusable schemas: role cards, handoff envelopes, tool contracts, guardrails, traceability matrix, eval scorecard, spec-lint checklist (index at `README.md`) |
+| `references/templates/agentic-handoff/` | Reusable schemas: role cards, handoff envelopes, tool contracts, skill contracts, guardrails, traceability matrix, eval scorecard, spec-lint checklist (index at `README.md`) |
 
 ## Out of scope
 

@@ -148,7 +148,7 @@ This writes actual `.pptx`, `.docx`, `.xlsx`, `.csv`, `.pdf`, `.html`, `.json`, 
 The plugin companion is the portable method layer for the app. It ships three bodies of knowledge without requiring the local workbench:
 
 - **Research synthesis** — *how to decide for Agent Builder outputs*. Product-development agent handoff guidance, autonomy boundaries, tool permission tiers, workflow topology, memory taxonomy, and artifact contracts. 2 Agent Builder-authored synthesis files.
-- **Catalog** — *what exists*. Architecture taxonomy (Type I-V), six-component harness model, 7 framework deep dives (LangGraph / CrewAI / Pydantic AI / smolagents / DSPy / AutoGen / Bedrock), memory substrate inventory, 14 production lab patterns (Anthropic, OpenAI, Perplexity, Manus, Google, Devin, Cursor, Windsurf, and more), and dedicated guidance for agents built on local/open-source models (Ollama, llama.cpp, vLLM, Llama, Qwen, DeepSeek, Mistral). 6 catalog files.
+- **Catalog** — *what exists and how to package it*. Architecture taxonomy (Type I-V), six-component harness model, 7 framework deep dives (LangGraph / CrewAI / Pydantic AI / smolagents / DSPy / AutoGen / Bedrock), memory substrate inventory, 14 production lab patterns (Anthropic, OpenAI, Perplexity, Manus, Google, Devin, Cursor, Windsurf, and more), local/open-source model guidance, local repo scan takeaways, repo/skill architecture, skill-bank and chaining patterns, and Claude/Codex/API-key deployment paths. 10 catalog files.
 - **Prompt contracts** — *how generated prompts stay reliable*. Generated agents include Prompt Builder contracts grounded in the local Prompt Builder repo plus current OpenAI, Anthropic, Perplexity/Sonar, and MCP prompt guidance.
 
 The companion also includes output templates and two fully worked examples. The single `plugin/SKILL.md` is cross-LLM: natural-language description triggers in Claude Code and other hosts; the `metadata` frontmatter block (priority, pathPatterns, importPatterns, bashPatterns, promptSignals) auto-activates on Codex.
@@ -182,7 +182,7 @@ agent-builder/
 │   ├── examples/                       # 2 worked deliverables
 │   └── references/
 │       ├── methodology/                # Agent Builder synthesis/addenda
-│       ├── catalog/                    # 6 files — what exists
+│       ├── catalog/                    # 10 files — what exists and how to package it
 │       └── templates/                  # output shapes + nightly DOE contract
 ├── README.md                           # app/workbench source of truth
 ├── LICENSE                             # Apache-2.0
@@ -245,7 +245,7 @@ The plugin companion defaults to lean, solo-maintainable, single-agent architect
 ## Attribution
 
 - **External reference** — Agent Builder's design was informed by the [**`n-agentic-harnesses`**](https://github.com/NateBJones-Projects/OB1/tree/main/skills/n-agentic-harnesses) agent harness design skill authored by **Jonathan Edwards** (GitHub: [jonathanedwards](https://github.com/jonathanedwards)) and published in the OB1 repository owned by **Nate B Jones** ([NateBJones-Projects](https://github.com/NateBJones-Projects)). No source files from that project are bundled in this repository.
-- **Catalog** (`plugin/references/catalog/`) — original research from the **RossLabs.ai agentic AI architectures corpus** (April 2026, 368 sources) authored by Tyrone Ross.
+- **Catalog** (`plugin/references/catalog/`) — files 1-6 synthesize the **RossLabs.ai agentic AI architectures corpus** (April 2026, 368 sources) authored by Tyrone Ross; files 7-10 add local operational, repo/skill architecture, skill-bank/chaining, and host-deployment synthesis.
 - **SKILL.md, synthesis files, templates, examples, app code, and README** — original compositions by Tyrone Ross / RossLabs.ai, with source links preserved for research traceability.
 
 ## Sources used for the catalog

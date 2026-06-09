@@ -48,10 +48,13 @@ test("all bundled patterns generate the core artifact set", () => {
       "runtime/custom-loop-adapter.mjs",
       "scripts/setup-check.mjs",
       "setup/env.example",
+      "setup/host-deployment.md",
       "setup/install-checklist.md",
       "setup/local-models.md",
       "setup/requirements.json",
       "setup/vector-store.md",
+      "skills/skill-bank.json",
+      "skills/skill-contract.md",
       "sources.md",
       "system-prompt.md",
       "tools.json",
@@ -84,6 +87,9 @@ test("writer creates files only inside generated agents folder", async () => {
     const install = await readFile(join(root, result.outputDir, "INSTALL.md"), "utf8");
     const inputContract = await readFile(join(root, result.outputDir, "context/input-contract.md"), "utf8");
     const envExample = await readFile(join(root, result.outputDir, "setup/env.example"), "utf8");
+    const hostDeployment = await readFile(join(root, result.outputDir, "setup/host-deployment.md"), "utf8");
+    const skillBank = JSON.parse(await readFile(join(root, result.outputDir, "skills/skill-bank.json"), "utf8"));
+    const skillContract = await readFile(join(root, result.outputDir, "skills/skill-contract.md"), "utf8");
     const setupCheck = await readFile(join(root, result.outputDir, "scripts/setup-check.mjs"), "utf8");
     const runtimeAdapter = await readFile(join(root, result.outputDir, "runtime/custom-loop-adapter.mjs"), "utf8");
     const runtimeGuide = await readFile(join(root, result.outputDir, "runtime/adapters/custom-loop.md"), "utf8");
@@ -92,16 +98,30 @@ test("writer creates files only inside generated agents folder", async () => {
     assert.equal(packageManifest.selfContained, true);
     assert.equal(packageManifest.canonicalBuilderOutput, "generated/agents/local-agent");
     assert.equal(packageManifest.copyPolicy, "copy-directory-as-unit");
+    assert.equal(packageManifest.entrypoints.skillBank, "skills/skill-bank.json");
+    assert.equal(packageManifest.entrypoints.skillContract, "skills/skill-contract.md");
+    assert.equal(packageManifest.entrypoints.hostDeployment, "setup/host-deployment.md");
     assert.equal(packageJson.scripts["setup:check"], "node scripts/setup-check.mjs");
     assert.equal(packageJson.scripts["runtime:check"], "node runtime/custom-loop-adapter.mjs --fixture");
     assert.equal(requirements.schemaVersion, "agent-builder.setup-requirements.v1");
     assert.ok(requirements.requiredFiles.includes("setup/requirements.json"));
     assert.ok(requirements.requiredFiles.includes("runtime/adapter-contract.md"));
+    assert.ok(requirements.requiredFiles.includes("skills/skill-bank.json"));
+    assert.ok(requirements.requiredFiles.includes("skills/skill-contract.md"));
+    assert.ok(requirements.requiredFiles.includes("setup/host-deployment.md"));
     assert.match(manifest, /"schemaVersion": "agent-builder.v1"/);
     assert.match(install, /Copy the entire `generated\/agents\/local-agent\/` folder/);
     assert.match(inputContract, /Required Inputs/);
     assert.match(envExample, /AGENT_PACKAGE_ROOT=/);
+    assert.equal(skillBank.schemaVersion, "agent-builder.skill-bank.v1");
+    assert.ok(skillBank.skills.some((skill) => skill.id === "local-agent-operating-skill"));
+    assert.match(skillContract, /# Skill Contract/);
+    assert.match(skillContract, /Skill Chaining/);
+    assert.match(hostDeployment, /API-key Runtime/);
+    assert.match(hostDeployment, /Claude/);
+    assert.match(hostDeployment, /Codex/);
     assert.match(setupCheck, /missingFiles/);
+    assert.match(runtimeAdapter, /skillBank/);
     assert.match(runtimeAdapter, /runFixture/);
     assert.match(runtimeGuide, /Custom loop Adapter Guide/);
     assert.match(tools, /"schemaVersion": "agent-builder.tools.v1"/);

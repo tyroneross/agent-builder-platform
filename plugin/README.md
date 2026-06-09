@@ -15,7 +15,7 @@ Included:
 - `.codex-plugin/plugin.json` — Codex plugin manifest.
 - `metadata.json` — host-neutral companion metadata.
 - `examples/` — worked design/evaluation examples.
-- `references/` — catalog, methodology, and output templates.
+- `references/` — catalog, methodology, and output templates, including repo structure, skill capture/modification, skill-bank/chaining, cross-host deployment, and agentic handoff contracts.
 
 Not included:
 
@@ -44,4 +44,5 @@ Inside another plugin, copy this directory into that plugin's `skills/agent-buil
 - Do not import app-root files from `SKILL.md` or references.
 - Keep Claude and Codex manifests version-aligned.
 - Update this README when the companion gains a new required file or host surface.
+- Keep `metadata.json` and `.github/workflows/verify-install.yml` aligned with required reference/template paths before release.
 - Use the app repository for heavy workflows: visual builder, generated packages, tests, local model experiments, and dashboards.

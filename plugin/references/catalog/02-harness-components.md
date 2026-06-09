@@ -23,6 +23,8 @@ Layered documents built to delete with each model release. Claude Code: custom �
 ### 2. Tool Definitions
 Each MCP tool costs 500–1,000+ context tokens. On-demand loading is critical. Anthropic's tool-testing agent — which rewrites tool descriptions automatically — reduced completion time 40%.
 
+For tools that mutate state, the definition is incomplete unless it names the state owner, side effect, receipt/readback evidence, rollback path, and permission tier. See `07-local-operational-patterns.md` for the read-after-write contract.
+
 ### 3. Memory (COALA Framework)
 Five layers:
 - **Working** — context window, ephemeral
@@ -31,7 +33,7 @@ Five layers:
 - **Long-term Episodic** — conversation logs
 - **Procedural** — AGENTS.md / CLAUDE.md files
 
-See `04-memory-substrates.md` for substrate-level implementation detail.
+See `04-memory-substrates.md` for substrate-level implementation detail. For long-term project memory, also require a promotion boundary: raw/candidate observations must not become durable decisions or lessons without review, provenance, and validation.
 
 ### 4. Context Window Management
 The #1 bottleneck. Six strategies in production:
@@ -49,10 +51,12 @@ Four tiers:
 3. **Critic agents** — second model reviews output
 4. **Human escalation** — approval gate
 
-Max-retry with exponential backoff is the minimum baseline.
+Max-retry with exponential backoff is the minimum baseline. In stateful or multi-agent harnesses, add replay and read-after-write regressions for every prior stale-read, dropped-write, or missing-receipt failure.
 
 ### 6. Observability
 "Way more impactful in agents than single LLM apps." Tooling: LangSmith, Logfire, Langfuse. Emerging pattern: **harness-as-dataset** — failure trajectories become training data for the next harness iteration.
+
+Operational observability should include the facts operators actually need: state owner, current phase, last mutation evidence, pending receipts/ACKs, stale-memory warnings, queue/backpressure state, eval validity, cost, and stop reason.
 
 ---
 
@@ -73,4 +77,22 @@ Use the component view when talking to operators or SREs. Use the artifact view 
 
 ---
 
-*Catalog file 02/05 · derived from RossLabs agentic architectures research corpus · April 2026*
+## Local Operational Overlay
+
+For repo-local, long-running, daemon-backed, or multi-agent systems, apply `07-local-operational-patterns.md` after this six-component checklist. It adds nine concrete contracts that are easy to miss in abstract architecture reviews:
+
+- state owner
+- mutation readback
+- receipts / ACKs
+- memory promotion
+- provenance
+- freshness
+- backpressure
+- eval honesty
+- real transport tests
+
+If those contracts are absent, the harness can appear complete while still failing under resume, coordination, memory reuse, or live-runtime pressure.
+
+---
+
+*Catalog file 02/10 · derived from RossLabs agentic architectures research corpus · April 2026*

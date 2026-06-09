@@ -2,7 +2,7 @@
   "name": "agent-builder",
   "displayName": "Agent Builder Plugin Companion",
   "version": "0.3.1",
-  "description": "Standalone companion skill for designing and evaluating agentic harnesses without installing the Agent Builder app.",
+  "description": "Standalone companion skill for designing, evaluating, packaging, and deploying agentic harnesses without installing the Agent Builder app.",
   "productRole": "plugin-companion",
   "companionFor": {
     "name": "Agent Builder App",
@@ -20,6 +20,11 @@
     "README.md",
     "examples",
     "references",
+    "references/catalog/07-local-operational-patterns.md",
+    "references/catalog/08-repo-skill-architecture.md",
+    "references/catalog/09-skill-bank-and-chaining.md",
+    "references/catalog/10-cross-host-deployment.md",
+    "references/templates/agentic-handoff/skill-contract.md",
     ".claude-plugin/plugin.json",
     ".codex-plugin/plugin.json"
   ],

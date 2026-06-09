@@ -30,7 +30,7 @@ Objectives: pass_rate (higher, .7) + mean_latency_ms (lower, .3), scalarized.
    main effect and +62ms latency. Terse field lists beat full schema dumps.
 3. **Scalarized winner**: ollama / no-schema / strict (0.89 @ 284ms, score 0.92).
    The mlx / no-schema / strict cell reached 1.00 pass.
-4. **Backend main effect on pass rate is small** (−0.07): lane choice matters
+4. **Backend main effect on pass rate is small** (−0.09): lane choice matters
    far less than prompt shape at this size class.
 
 ### Anomaly (root-caused to failure signature)

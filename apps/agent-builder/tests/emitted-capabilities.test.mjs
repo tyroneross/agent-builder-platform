@@ -57,11 +57,18 @@ test("doc-input spec emits the omniparse ingest surface end to end", () => {
   const files = fileMap(out);
   const tools = JSON.parse(files["tools.json"]);
   assert.ok(tools.tools.some((t) => t.name === "doc-ingest"), "tool slot emitted");
+  const manifest = JSON.parse(files["manifest.json"]);
+  assert.ok(manifest.governance.toolTiers.some((t) => t.tool === "doc-ingest"), "manifest governance includes emitted tool");
+  assert.match(files["contracts/tool-contracts.yaml"], /name: doc-ingest/);
   const runtime = files["runtime/doc-ingest.mjs"];
   assert.ok(runtime.includes('from "@tyroneross/omniparse"'));
   assert.ok(runtime.includes("detectInputType"));
   const pkg = JSON.parse(files["package.json"]);
   assert.equal(pkg.dependencies["@tyroneross/omniparse"], "^1.0.0");
+  const packageManifest = JSON.parse(files["agent-package.json"]);
+  const requirements = JSON.parse(files["setup/requirements.json"]);
+  assert.ok(packageManifest.files.includes("runtime/doc-ingest.mjs"));
+  assert.ok(requirements.requiredFiles.includes("runtime/doc-ingest.mjs"));
   const bank = JSON.parse(files["skills/skill-bank.json"]);
   assert.ok(bank.skills.some((s) => s.id.endsWith("doc-ingest-skill")));
 });

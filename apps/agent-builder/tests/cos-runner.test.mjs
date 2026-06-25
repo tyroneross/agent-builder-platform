@@ -19,6 +19,17 @@ import {
 import { recordTelemetry } from "../lib/cos-telemetry.mjs";
 import * as providers from "../lib/providers/index.mjs";
 import { setChatImpl } from "../lib/providers/index.mjs";
+import { setLocalHealthImpl } from "../lib/cos-runner.mjs";
+
+// HERMETIC GUARD: cos-runner probes the local model servers (Ollama/MLX) to
+// decide local-lane eligibility. On a dev box those servers are up; in CI they
+// are not — so the live probe is the single source of environment-dependence
+// that made an earlier debug pass green locally and red in CI. Every
+// runChiefOfStaff test below pins local health deterministically via
+// setLocalHealthImpl(): no live probe, no network call to :11434. The chat layer
+// is mocked separately via setChatImpl(). Tests exercising the cascade-to-cloud
+// path set local UNHEALTHY; tests exercising the local happy path set HEALTHY.
+const LOCAL_HEALTHY = { mlx: true, ollama: true };
 // Per-provider behavior is reached through the package's root `chat` dispatcher
 // (provider-keyed); the four 1-line app-local shims were removed. The dispatcher
 // routes to the same provider module, so the missing-key / cache_control /
@@ -250,6 +261,9 @@ test("recordTelemetry: appends one JSONL row per call", async () => {
 
 test("runChiefOfStaff: cascade falls back from local to cloud on local error", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   // The cascade builder filters cloud lanes lacking API keys. Set a stub key
   // so the groq lane is included. The mocked chat impl ignores the value.
@@ -312,6 +326,7 @@ test("runChiefOfStaff: cascade falls back from local to cloud on local error", a
     assert.ok(groqWins.length >= 6, "expected groq success rows for all 6 nodes");
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     if (origGroq != null) process.env.GROQ_API_KEY = origGroq; else delete process.env.GROQ_API_KEY;
     await rm(dir, { recursive: true, force: true });
   }
@@ -319,6 +334,9 @@ test("runChiefOfStaff: cascade falls back from local to cloud on local error", a
 
 test("runChiefOfStaff: allowCloud=never never reaches groq", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   const seen = new Set();
   setChatImpl(async (opts) => {
@@ -348,12 +366,16 @@ test("runChiefOfStaff: allowCloud=never never reaches groq", async () => {
     }
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(dir, { recursive: true, force: true });
   }
 });
 
 test("runChiefOfStaff: parse-retry fires on null parse, succeeds on retry", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   // Track per-(provider,model) call counts so we can return null first then valid second.
   const counts = new Map();
@@ -434,6 +456,7 @@ test("runChiefOfStaff: parse-retry fires on null parse, succeeds on retry", asyn
     assert.equal(parsedNodes.length, 6, "every node should have ended with a parsed result");
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(dir, { recursive: true, force: true });
   }
 });
@@ -442,11 +465,34 @@ test("runChiefOfStaff: parse-retry fires on null parse, succeeds on retry", asyn
 
 test("runChiefOfStaff: decision_log/follow_up_plan/operating_risks run in parallel", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   const FAKE_JSON = '{"weekOf":"2026-W19","fixedEvents":[],"flexibleEvents":[],"baseline":{"deepWorkHours":0,"adminHours":0,"contextSwitches":0,"openLoopRisk":"low"},"notes":[],"topThree":[],"blocks":[],"decisions":[],"items":[],"missingOwners":[],"risks":[]}';
 
-  // Simulate 80ms latency per node call. If the 3 leaf nodes run in parallel,
-  // their wall-clock should be ~80ms, not ~240ms.
+  // Concurrency is proven by INSTRUMENTED OVERLAP, not by a wall-vs-summed
+  // ratio. A ratio test (`wall < summed * 0.7`) is invalid when the mocked path
+  // is instant (both 0ms → `0 < 0` is false) and flaky on coarse ms-truncated
+  // timestamps. Instead we record each leaf call's enter/exit and track the
+  // peak number of leaf calls in flight at once: if the 3 leaves run as a
+  // dependency wave (Promise.all), at least 2 are concurrently in-flight. A
+  // hold gate keeps the first leaves parked until all three have entered, so
+  // the overlap is deterministic and does not depend on timer precision.
+  const leaves = ["decision_log", "follow_up_plan", "operating_risks"];
+  const leafEntries = new Set();
+  let inFlight = 0;
+  let peakInFlight = 0;
+  let releaseHold;
+  const holdUntilAllEntered = new Promise((r) => { releaseHold = r; });
+
+  const leafKeyFor = (userMsg) => {
+    if (userMsg.includes("decision log")) return "decision_log";
+    if (userMsg.includes("Follow-up Operator")) return "follow_up_plan";
+    if (userMsg.includes("Honesty Auditor")) return "operating_risks";
+    return null;
+  };
+
   setChatImpl(async (opts) => {
     if (opts.messages?.[0]?.content?.includes('Return {"ok":true}')) {
       return {
@@ -454,7 +500,20 @@ test("runChiefOfStaff: decision_log/follow_up_plan/operating_risks run in parall
         tokens_in: 1, tokens_out: 1, provider: opts.provider, model: opts.model,
       };
     }
-    await new Promise((r) => setTimeout(r, 80));
+    const leaf = leafKeyFor(opts.messages[0].content);
+    if (leaf) {
+      leafEntries.add(leaf);
+      inFlight += 1;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      // Once all three leaves are in-flight, release the gate so they all
+      // complete. If they ran sequentially, the first would block here forever
+      // (the others never enter) — the run would hang and fail, which is itself
+      // a correct signal that the wave did not parallelize. They run together,
+      // so all three enter and the gate opens deterministically.
+      if (leafEntries.size === leaves.length) releaseHold();
+      await holdUntilAllEntered;
+      inFlight -= 1;
+    }
     return {
       ok: true, text: FAKE_JSON, parsed: JSON.parse(FAKE_JSON), raw: null,
       tokens_in: 100, tokens_out: 50, provider: opts.provider, model: opts.model,
@@ -471,23 +530,20 @@ test("runChiefOfStaff: decision_log/follow_up_plan/operating_risks run in parall
       runDir: dir,
     });
 
-    const leaves = ["decision_log", "follow_up_plan", "operating_risks"];
-    const ts = leaves.map((k) => ({
-      key: k,
-      start: Date.parse(transcript.nodes[k].startedAt),
-      end: Date.parse(transcript.nodes[k].endedAt),
-      dur: transcript.nodes[k].durationMs,
-    }));
-    const summed = ts.reduce((a, b) => a + b.dur, 0);
-    const wall = Math.max(...ts.map((x) => x.end)) - Math.min(...ts.map((x) => x.start));
-    // Wall-clock for the fan-out wave should be much less than the sum of
-    // individual durations — at least < 70% of summed when they run together.
+    // All three leaves entered, and at the peak ≥2 were in flight at the same
+    // time — direct, timer-free proof they ran as a concurrent wave.
+    assert.equal(leafEntries.size, leaves.length, "all three leaf nodes should have run");
     assert.ok(
-      wall < summed * 0.7,
-      `expected fan-out (wall=${wall}ms) << summed (${summed}ms); leaves did not run concurrently`,
+      peakInFlight >= 2,
+      `expected ≥2 leaf nodes in flight concurrently, peak was ${peakInFlight}; leaves did not run concurrently`,
     );
+    // Sanity: every leaf produced a parsed result.
+    for (const k of leaves) {
+      assert.ok(transcript.nodes[k].parsed != null, `${k} should have a parsed result`);
+    }
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(dir, { recursive: true, force: true });
   }
 });
@@ -496,6 +552,9 @@ test("runChiefOfStaff: decision_log/follow_up_plan/operating_risks run in parall
 
 test("runChiefOfStaff: warmup picks smallest local model, not synthesis", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   const FAKE_JSON = '{"weekOf":"2026-W19","fixedEvents":[],"flexibleEvents":[],"baseline":{"deepWorkHours":0,"adminHours":0,"contextSwitches":0,"openLoopRisk":"low"},"notes":[],"topThree":[],"blocks":[],"decisions":[],"items":[],"missingOwners":[],"risks":[]}';
   let warmupModel = null;
@@ -542,6 +601,7 @@ test("runChiefOfStaff: warmup picks smallest local model, not synthesis", async 
     );
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(dir, { recursive: true, force: true });
   }
 });
@@ -637,6 +697,9 @@ test("openai.chat: uses strict json_schema mode when jsonSchema is provided", as
 
 test("runChiefOfStaff: cascade extends to anthropic + openai when groq fails", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   // All 3 cloud keys present so all cloud lanes are eligible
   const origs = {
@@ -689,6 +752,7 @@ test("runChiefOfStaff: cascade extends to anthropic + openai when groq fails", a
     assert.ok(anyCacheRead, "expected at least one telemetry row with cache_read_tokens");
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     for (const [k, v] of Object.entries(origs)) {
       if (v != null) process.env[k] = v; else delete process.env[k];
     }
@@ -700,6 +764,9 @@ test("runChiefOfStaff: cascade extends to anthropic + openai when groq fails", a
 
 test("runChiefOfStaff: loads ≤2 promoted lessons into triage + time_block_plan only", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
   const { writeFile, mkdir } = await import("node:fs/promises");
 
   // Set up a parent dir with a prior run + ledger and a fresh runDir.
@@ -762,6 +829,7 @@ test("runChiefOfStaff: loads ≤2 promoted lessons into triage + time_block_plan
     }
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(parent, { recursive: true, force: true });
   }
 });
@@ -770,6 +838,9 @@ test("runChiefOfStaff: loads ≤2 promoted lessons into triage + time_block_plan
 
 test("runChiefOfStaff: each role sees only its own scoped brief", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   const seen = {};
   setChatImpl(async (opts) => {
@@ -814,12 +885,16 @@ test("runChiefOfStaff: each role sees only its own scoped brief", async () => {
     assert.doesNotMatch(seen.intake, /Mission:/);
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(dir, { recursive: true, force: true });
   }
 });
 
 test("runChiefOfStaff: normalizes ICS input, injects feedback, passes seed, and emits quality scorecard", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   const seen = {};
   const seeds = [];
@@ -915,6 +990,7 @@ END:VCALENDAR`,
     assert.equal(transcript.qualityScorecard.score, transcript.qualityScorecard.maxScore);
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(dir, { recursive: true, force: true });
   }
 });
@@ -923,6 +999,9 @@ END:VCALENDAR`,
 
 test("runChiefOfStaff: telemetry rows carry role (or null for intake / _warmup / _run)", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   setChatImpl(async (opts) => {
     if (opts.messages?.[0]?.content?.includes('Return {"ok":true}')) {
@@ -957,6 +1036,7 @@ test("runChiefOfStaff: telemetry rows carry role (or null for intake / _warmup /
     for (const r of orRows) assert.equal(r.role, "honesty_auditor");
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(dir, { recursive: true, force: true });
   }
 });
@@ -965,6 +1045,9 @@ test("runChiefOfStaff: telemetry rows carry role (or null for intake / _warmup /
 
 test("runChiefOfStaff: per-node tier produces different models in telemetry", async () => {
   const mod = await import("../lib/cos-runner.mjs");
+  // Pin local-lane health so the cascade is deterministic regardless of whether
+  // a real Ollama/MLX server is reachable (hermetic — no probe, no :11434 call).
+  setLocalHealthImpl(LOCAL_HEALTHY);
 
   setChatImpl(async (opts) => {
     const fakeJson = '{"weekOf":"2026-W19","fixedEvents":[],"flexibleEvents":[],"baseline":{"deepWorkHours":0,"adminHours":0,"contextSwitches":0,"openLoopRisk":"low"},"notes":[],"topThree":[],"blocks":[],"decisions":[],"items":[],"missingOwners":[],"risks":[]}';
@@ -1005,6 +1088,7 @@ test("runChiefOfStaff: per-node tier produces different models in telemetry", as
     );
   } finally {
     setChatImpl(null);
+    setLocalHealthImpl(null);
     await rm(dir, { recursive: true, force: true });
   }
 });

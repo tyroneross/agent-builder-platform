@@ -5,8 +5,21 @@ import { dirname, extname, isAbsolute, join, relative, resolve } from "node:path
 import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { inflateRawSync, inflateSync } from "node:zlib";
-import { DatabaseSync } from "node:sqlite";
 import { MAC_RAM_PROFILES, profileByRam } from "./meeting-model-profiles.mjs";
+
+// node:sqlite is a built-in only on Node >= 22.13 (flag-free) and is still
+// experimental. Import it lazily so this module can be loaded — by tests, by
+// the Next.js build's page-data collection, and by routes — on runtimes where
+// the builtin is absent, without crashing at module-evaluation time. The
+// actual SQLite work only runs when a handler is invoked at request time on a
+// supported runtime (CI + prod pin Node >= 22.13; see root engines/.nvmrc).
+let _databaseSyncPromise = null;
+async function loadDatabaseSync() {
+  if (!_databaseSyncPromise) {
+    _databaseSyncPromise = import("node:sqlite").then((mod) => mod.DatabaseSync);
+  }
+  return _databaseSyncPromise;
+}
 
 const DEFAULT_STORE_DIR = join("agent-outputs", "local-knowledge-agent", "store");
 const DEFAULT_STORE_FILE = "store.json";
@@ -211,7 +224,7 @@ export async function searchMeetingMemory(query, options = {}) {
       limit: options.limit ?? 8,
       preferOllama: options.preferOllama !== false,
     });
-  const sql = mode === "semantic" ? { results: [] } : searchKnowledgeSql(query, options);
+  const sql = mode === "semantic" ? { results: [] } : await searchKnowledgeSql(query, options);
   const results = mode === "semantic"
     ? semantic.results
     : mode === "sql"
@@ -887,6 +900,7 @@ function rebuildKnowledgeGraph(store) {
 async function saveKnowledgeDatabase(store, options = {}) {
   const file = resolveDbFile(options);
   await mkdir(dirname(file), { recursive: true });
+  const DatabaseSync = await loadDatabaseSync();
   const db = new DatabaseSync(file);
   try {
     ensureKnowledgeSchema(db);
@@ -1024,9 +1038,10 @@ CREATE INDEX IF NOT EXISTS entities_label_idx ON entities(label);
 `);
 }
 
-function searchKnowledgeSql(query, options = {}) {
+async function searchKnowledgeSql(query, options = {}) {
   const file = resolveDbFile(options);
   if (!existsSync(file) || !cleanText(query)) return { results: [] };
+  const DatabaseSync = await loadDatabaseSync();
   const db = new DatabaseSync(file, { readOnly: true });
   try {
     const chunkStmt = db.prepare(`

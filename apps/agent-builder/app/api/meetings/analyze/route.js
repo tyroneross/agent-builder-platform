@@ -1,6 +1,7 @@
 import { analyzeMeetingUploads, getMeetingStoreStats } from "../../../../lib/meeting-transcript-agent.mjs";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {

@@ -45,7 +45,25 @@ export { ollamaTags };
 let _localHealth = null;
 let _localHealthAt = 0;
 const LOCAL_HEALTH_TTL_MS = 60000;
+
+// Test seam — mirror of the package's setChatImpl(). The probe layer does a real
+// fetch() to the local model servers; on a dev box with Ollama/MLX running those
+// probes succeed, but a clean CI runner has no local server, so the live probes
+// would resolve the local lanes differently than the dev machine (the exact
+// false-green that fooled an earlier debug pass). Tests install a deterministic
+// health object here so cos-runner is environment-independent: NO live probe runs
+// and NO network call to :11434 happens when an override is set.
+let _localHealthImpl = null;
+export function setLocalHealthImpl(health) {
+  // Accept either a static `{mlx, ollama}` object or a function returning one
+  // (sync or async). `null` clears the override and restores live probing.
+  _localHealthImpl = health;
+}
+
 async function getLocalHealth() {
+  if (_localHealthImpl != null) {
+    return typeof _localHealthImpl === "function" ? await _localHealthImpl() : _localHealthImpl;
+  }
   // Cache for 60s (not forever): MLX/Ollama started AFTER the first run must be
   // able to rejoin the cascade without a process restart.
   if (_localHealth && Date.now() - _localHealthAt < LOCAL_HEALTH_TTL_MS) return _localHealth;
@@ -614,8 +632,13 @@ async function runWarmup({ nodes, policy, modelOverride, timeoutMs, runDir, onEv
   }
   if (!target?.model) return;
 
-  // If Ollama already has the target loaded, skip warmup.
-  if (target.provider === "ollama") {
+  // If Ollama already has the target loaded, skip warmup. This `ollamaPs()` call
+  // hits the live Ollama server (`GET /api/ps`) — purely an optimization to avoid
+  // re-loading an already-resident model. When local health is injected (test
+  // mode), the override owner controls lane health, so we skip this live probe
+  // entirely: it keeps the runner hermetic (no :11434 call) and the warmup chat
+  // below is the mocked seam that actually matters to the tests.
+  if (target.provider === "ollama" && _localHealthImpl == null) {
     try {
       const ps = await ollamaPs();
       const loaded = (ps?.models ?? []).map((m) => m.name ?? m.model ?? "");

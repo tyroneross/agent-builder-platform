@@ -1,7 +1,7 @@
 {
   "name": "agent-builder",
-  "version": "0.3.1",
-  "description": "Standalone plugin companion for designing, evaluating, packaging, and deploying agentic harnesses with repo structure, reusable skills, skill banks, and cross-host contracts",
+  "version": "0.4.0",
+  "description": "Standalone plugin companion for designing, evaluating, building, packaging, and deploying agentic harnesses, skills, and plugins with dual-format (Claude + AGENTS.md) output, polyglot scaffolding, repo structure, reusable skills, skill banks, and cross-host contracts",
   "author": {
     "name": "Tyrone Ross"
   },
@@ -37,8 +37,8 @@
   "skills": "./",
   "interface": {
     "displayName": "Agent Builder",
-    "shortDescription": "Plugin companion for designing and evaluating agentic harnesses",
-    "longDescription": "Standalone plugin companion for the Agent Builder app. It provides the cross-LLM skill, research synthesis, reusable templates, Prompt Builder prompt contracts, and an empirical catalog covering architectures, frameworks, memory substrates, lab patterns, local/open-source model agents, repo structure, reusable skill banks, skill chaining, and API/Claude/Codex deployment without requiring the local app.",
+    "shortDescription": "Plugin companion for designing, evaluating, and building agentic harnesses, skills, and plugins",
+    "longDescription": "Standalone plugin companion for the Agent Builder app. It provides the cross-LLM skill, research synthesis, reusable templates, Prompt Builder prompt contracts, a Build Mode that scaffolds runnable skills/plugins with dual-format Claude SKILL.md + host-neutral AGENTS.md output and polyglot (Python/Rust/R/shell) script scaffolding, and an empirical catalog covering architectures, frameworks, memory substrates, lab patterns, local/open-source model agents, repo structure, reusable skill banks, skill chaining, and API/Claude/Codex deployment without requiring the local app.",
     "developerName": "Ross Labs",
     "category": "Coding",
     "capabilities": [

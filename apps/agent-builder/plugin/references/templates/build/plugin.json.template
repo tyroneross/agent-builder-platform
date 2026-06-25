@@ -1,0 +1,10 @@
+{
+  "name": "{{PLUGIN_NAME}}",
+  "version": "0.1.0",
+  "description": "{{DESCRIPTION}}",
+  "author": { "name": "{{AUTHOR_NAME}}" },
+  "homepage": "{{HOMEPAGE}}",
+  "repository": "{{REPOSITORY}}",
+  "license": "{{LICENSE}}",
+  "keywords": [{{KEYWORDS}}]
+}

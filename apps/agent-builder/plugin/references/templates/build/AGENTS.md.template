@@ -1,0 +1,50 @@
+<!--
+AGENTS.md — host-neutral surface (Codex, Cursor, Gemini CLI, Copilot, and other AGENTS.md-aware tools).
+Plain Markdown, NO frontmatter (per the agents.md spec). Repo root is primary; in a monorepo a nested
+AGENTS.md overrides the root one (nearest-wins). This file is the host-neutral PROJECTION of the same
+methodology carried by SKILL.md. Keep the two in parity — see PARITY.md.
+-->
+
+# {{SKILL_TITLE}}
+
+{{SKILL_TITLE}} owns one job: {{PURPOSE_ONE_LINE}}.
+
+## When To Use
+
+Use this when {{TRIGGER_SUMMARY}}. Triggers: {{TRIGGER_PHRASES}}.
+Do not use it for {{NEGATIVE_TRIGGER}}.
+
+## Setup
+
+{{SETUP_NOTES}}
+
+## Workflow
+
+1. {{STEP_1}}
+2. {{STEP_2}}
+3. {{STEP_3}}
+
+Detailed variants live in `references/` (authored once, shared by both surfaces):
+
+- `references/{{REFERENCE_1}}` — read when {{READ_WHEN_1}}.
+
+## Scripts
+
+{{SCRIPT_AGENTS_BLOCK}}
+
+## Output
+
+Produces: {{OUTPUT_ARTIFACT}}.
+
+## Validation / Test
+
+- {{VALIDATION_CHECK_1}}
+{{SCRIPT_VALIDATION_LINE_NEUTRAL}}
+
+## Required Host Capabilities
+
+{{HOST_CAPABILITIES}}
+
+## Notes On Claude-Only Mechanics
+
+{{CLAUDE_ONLY_NOTES}}

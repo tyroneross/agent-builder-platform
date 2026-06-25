@@ -1,0 +1,40 @@
+---
+name: {{SKILL_ID}}
+description: {{DESCRIPTION}}
+{{ALLOWED_TOOLS_LINE}}---
+
+# {{SKILL_TITLE}}
+
+> One-line statement of the single job this skill owns.
+
+## When To Use
+
+Activate when {{TRIGGER_SUMMARY}}. Trigger phrases: {{TRIGGER_PHRASES}}.
+
+Negative trigger: do NOT use this skill for {{NEGATIVE_TRIGGER}} — that belongs to {{OTHER_SKILL_OR_NONE}}.
+
+## Workflow
+
+1. {{STEP_1}}
+2. {{STEP_2}}
+3. {{STEP_3}}
+
+Read the deep variants only when needed (progressive disclosure):
+
+- `references/{{REFERENCE_1}}` — read when {{READ_WHEN_1}}.
+{{SCRIPT_BODY_BLOCK}}
+
+## Output
+
+This skill produces: {{OUTPUT_ARTIFACT}}.
+
+## Validation
+
+- {{VALIDATION_CHECK_1}}
+{{SCRIPT_VALIDATION_LINE}}
+
+<!--
+PARITY: every rule above must also appear in AGENTS.md. See PARITY.md.
+SOURCE-OF-TRUTH: methodology authored once; this SKILL.md and AGENTS.md are two projections.
+description must stay under 1536 chars and carry literal trigger phrases (third person).
+-->

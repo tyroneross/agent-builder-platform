@@ -16,6 +16,8 @@ Included:
 - `metadata.json` — host-neutral companion metadata.
 - `examples/` — worked design/evaluation examples.
 - `references/` — catalog, methodology, and output templates, including repo structure, skill capture/modification, skill-bank/chaining, cross-host deployment, and agentic handoff contracts.
+- `references/build/` — Build Mode: the production workflow for scaffolding a runnable skill/plugin, the dual-format (Claude `SKILL.md` + host-neutral `AGENTS.md`) parity contract, the polyglot script decision guide, and the research-first protocol.
+- `references/templates/build/` + `references/scripts/scaffold_skill.py` — source-of-truth dual-format templates and the stdlib scaffolder that emits both surfaces plus a parity checklist and an optional tested helper script (Python/Rust/R/shell).
 
 Not included:
 
@@ -46,3 +48,16 @@ Inside another plugin, copy this directory into that plugin's `skills/agent-buil
 - Update this README when the companion gains a new required file or host surface.
 - Keep `metadata.json` and `.github/workflows/verify-install.yml` aligned with required reference/template paths before release.
 - Use the app repository for heavy workflows: visual builder, generated packages, tests, local model experiments, and dashboards.
+
+## Changelog
+
+### 0.4.0 — Build Mode (additive)
+
+Adds a first-class capability to **build** runnable skills and plugins as deliverables, alongside the existing design/evaluation harness workflow (which is unchanged):
+
+- **Build Mode** (`references/build/01-build-skill-or-plugin.md`): a B0–B6 production workflow with four non-negotiables — research-first, dual-format output, scripts-in-the-right-language, and modular inherit-first reuse. Wired into `SKILL.md` Step 1 as the `build` mode plus a `build` Output Contract.
+- **Dual-format output** (`references/build/02-dual-format-parity.md`): every built skill/plugin ships BOTH a Claude-native `SKILL.md` (+ `.claude-plugin/plugin.json` for plugins) AND a host-neutral `AGENTS.md` from one source, with a 10-rule parity checklist that prevents drift.
+- **Polyglot scripting** (`references/build/03-polyglot-script-guide.md`): a decision guide for Python (default, `uv`), Rust (perf/CLI), R (stats), and shell (orchestration), with minimal-deps rules and the skill↔script contract.
+- **Research-first protocol** (`references/build/04-research-first-protocol.md`): research current docs/best-practices before authoring anything touching an unfamiliar library/API/CLI/format; host-agent-is-the-LLM (no hardcoded vendor calls).
+- **Scaffolder** (`references/scripts/scaffold_skill.py`): stdlib-only Python tool that emits both surfaces + `PARITY.md` + an optional tested helper script in any of the four languages. Self-test: `uv run python3 references/scripts/scaffold_skill.py --selftest`.
+- Templates conform to the current AGENTS.md spec (plain Markdown, no frontmatter) and current Claude plugin/skill structure (`.claude-plugin/plugin.json`, `SKILL.md` frontmatter `name` + `description` under 1,536 chars), confirmed against official docs June 2026.

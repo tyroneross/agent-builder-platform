@@ -195,6 +195,7 @@ Activate when any of the following hold:
 9. **When a harness spans repos, sessions, agents, daemons, or durable memory**, require operational contracts: one state owner, read-after-write evidence, receipt/ACK semantics, provenance, freshness checks, and a promotion/validation path. See `references/catalog/07-local-operational-patterns.md`.
 10. **When the user asks for an end-to-end build**, include repo structure, skill bank, skill contracts, host packaging, API-key/env contract, validation, and operating runbook. See `references/catalog/08-repo-skill-architecture.md`, `references/catalog/09-skill-bank-and-chaining.md`, and `references/catalog/10-cross-host-deployment.md`.
 11. **Scale the specification to the agent's risk and deployment profile.** A personal/local agent, reusable skill, team workflow, and enterprise runtime do not need the same validation burden. Use the profile matrix below as the minimum contract set, then promote the profile when autonomy, users, side effects, regulated data, or runtime sharing increase.
+12. **When the deliverable is a runnable skill or plugin (not just a design), enter Build Mode.** Produce it under the four non-negotiables: research-first when the domain is unfamiliar, dual-format Claude `SKILL.md` + host-neutral `AGENTS.md` from one source with the parity checklist passing, scripts in the right language (skills call scripts, never prose-reimplement deterministic logic), and modular inherit-first reuse of the existing catalog/templates. See `references/build/01-build-skill-or-plugin.md`.
 
 ## Spec Profile Matrix
 
@@ -256,6 +257,7 @@ When the deliverable includes a repo layout, reusable skill, skill bank, skill c
 - Read `references/catalog/10-cross-host-deployment.md` for API-key, Claude-native, Codex-native, host-agnostic, and hybrid deployment modes.
 - Use `references/templates/agentic-handoff/skill-contract.md` for every reusable skill the design creates or modifies.
 - Keep API runtime, host companion, and reusable skill-bank boundaries explicit. Do not hide host-specific assumptions inside core runtime code.
+- If the deliverable is a runnable skill/plugin (not just a plan), switch to Build Mode (`references/build/01-build-skill-or-plugin.md`) and scaffold both surfaces with `references/scripts/scaffold_skill.py`.
 
 ## Step 1 — Classify The Request
 
@@ -280,6 +282,13 @@ Default reads: union of the two above.
 User is asking a factual question about what exists — "which framework", "how does Anthropic's orchestrator work", "what memory substrate", "what's the adoption rate of Type III", "best local model tool-calling stack". Route straight to the catalog. Do **not** dump methodology files for this mode.
 
 Default reads: only the catalog file(s) relevant to the question. Cite the exact file and section. Surface trade-offs.
+
+### `build`
+User wants Agent Builder to PRODUCE a runnable skill or plugin as the deliverable — "build a skill", "create a plugin", "scaffold a skill", "generate a plugin that…", "ship a skill for…". The output is a working `SKILL.md` (+ optional plugin scaffolding and `AGENTS.md`), not a design memo. Design Mode plans it; Build Mode emits it.
+
+Default reads: `references/build/01-build-skill-or-plugin.md` (the production workflow), then on demand `references/build/02-dual-format-parity.md` (Claude + AGENTS.md parity), `references/build/03-polyglot-script-guide.md` (script language choice), and `references/build/04-research-first-protocol.md` (research gate). Inherit from `references/catalog/08-repo-skill-architecture.md` (skill anatomy/capture/modification), `references/catalog/10-cross-host-deployment.md` (host adapters), and `references/templates/agentic-handoff/skill-contract.md` (the skill contract). Use `references/templates/build/` as the source-of-truth templates and `references/scripts/scaffold_skill.py` to mechanize the dual-format copy.
+
+Every Build Mode deliverable MUST satisfy the four non-negotiables in `references/build/01-build-skill-or-plugin.md`: research-first when the domain is unfamiliar, dual-format (Claude `SKILL.md` + host-neutral `AGENTS.md`) from one source with the parity checklist passing, scripts in the right language (skills call scripts; Python default via `uv`, Rust for perf/CLI, R for stats, shell for orchestration), and modular inherit-first reuse of this plugin's existing catalog/templates.
 
 ## Step 2 — Classify The Product Shape
 
@@ -315,6 +324,14 @@ Read only the files the request actually needs. This file is the index — do no
 - `references/catalog/08-repo-skill-architecture.md` — repo shapes for API-first, host-native, and hybrid agent systems; skill anatomy, skill capture, skill modification, and build-ready artifact checklist.
 - `references/catalog/09-skill-bank-and-chaining.md` — structured skill bank entries, skill categories, chaining patterns, plug-and-play seed slots, and modify/wrap/fork/externalize decisions.
 - `references/catalog/10-cross-host-deployment.md` — deployment contracts for API-key runtimes, Claude-native packages, Codex-native packages, host-agnostic packages, hybrid companions, and cross-agent collaboration.
+
+### Build (producing a runnable skill/plugin)
+- `references/build/01-build-skill-or-plugin.md` — the Build Mode production workflow (B0–B6) and the four non-negotiables. Read first in `build` mode.
+- `references/build/02-dual-format-parity.md` — Claude `SKILL.md` + host-neutral `AGENTS.md` from one source, plus the 10-rule parity checklist. Read when shipping to more than one host (the default).
+- `references/build/03-polyglot-script-guide.md` — when a skill needs a script and which language (Python default via `uv` / Rust perf+CLI / R stats / shell orchestration); minimal-deps rules; the skill↔script contract.
+- `references/build/04-research-first-protocol.md` — the research gate: research current best practices/docs before authoring anything that touches an unfamiliar library/API/CLI/format; host-agent-is-the-LLM (no hardcoded vendor calls).
+- `references/templates/build/` — source-of-truth templates (`SKILL.md`, `AGENTS.md`, `plugin.json`, `parity-checklist`) the scaffolder fills. Index at `references/templates/build/README.md`.
+- `references/scripts/scaffold_skill.py` — stdlib-only dual-format scaffolder (Python); `uv run python3 references/scripts/scaffold_skill.py --selftest` to verify, `--help` for usage. Emits both surfaces + `PARITY.md` + an optional tested helper script in any of the four languages.
 
 ### Templates (output shapes)
 - `references/templates/design-deliverable.md` — use when producing a design output.
@@ -373,6 +390,15 @@ Read only the files the request actually needs. This file is the index — do no
 - source citation (`catalog/NN-filename.md § Section`)
 - one-line pointer to the methodology file that operationalizes the choice, if applicable
 
+### For `build`
+- job + surface (skill or plugin) + hosts + spec profile chosen, and why
+- research evidence note (sources + confidence markers) or `research: not required — familiar domain`
+- the scaffolded file tree, naming BOTH the Claude surface (`SKILL.md`, plugin manifest) and the `AGENTS.md` surface
+- script(s) added: language + purpose + test status, or `none — no deterministic step`
+- the filled parity checklist result (`PARITY.md`)
+- validation performed, with ✅/⚠️/❓ markers
+- anything unverified or assumed
+
 ## Final Check Before Responding
 
 - Did you keep the design lean enough for a solo developer unless the request clearly demanded more?
@@ -382,3 +408,4 @@ Read only the files the request actually needs. This file is the index — do no
 - Did you give the user an operational path forward instead of abstract theory?
 - If you recommended multi-agent, a framework, or a memory substrate, did you cite the catalog file you pulled it from?
 - If the target is a local/open-source model, did you apply the stricter posture from `catalog/06-local-and-open-source-models.md` (single-agent always, cull tools, compaction mandatory, evals non-optional)?
+- If you were in `build` mode, did you research-first on unfamiliar domains, ship BOTH `SKILL.md` and `AGENTS.md` from one source with the parity checklist passing, put deterministic work in a tested script in the right language, and reuse existing catalog/templates instead of duplicating?

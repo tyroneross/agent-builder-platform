@@ -83,6 +83,16 @@ jobs:
             references/catalog/09-skill-bank-and-chaining.md
             references/catalog/10-cross-host-deployment.md
             references/templates/agentic-handoff/skill-contract.md
+            references/build/01-build-skill-or-plugin.md
+            references/build/02-dual-format-parity.md
+            references/build/03-polyglot-script-guide.md
+            references/build/04-research-first-protocol.md
+            references/templates/build/README.md
+            references/templates/build/SKILL.md.template
+            references/templates/build/AGENTS.md.template
+            references/templates/build/plugin.json.template
+            references/templates/build/parity-checklist.md
+            references/scripts/scaffold_skill.py
           )
           for required in "${required_paths[@]}"; do
             if [ ! -e "node_modules/@tyroneross/agent-builder/$required" ]; then

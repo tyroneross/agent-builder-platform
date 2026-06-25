@@ -17,6 +17,15 @@ jobs:
         with:
           node-version: "24"
           cache: npm
+      # The agent-builder DOE test (doe-local-json.test.mjs) shells out to
+      # scripts/doe/doe.py, which imports numpy. The runner ships python3 but no
+      # numpy, so npm test fails without this. doe.py uses only long-stable numpy
+      # APIs (linalg.lstsq, random.default_rng, column_stack) — any numpy 2.x is
+      # fine; verified locally on 2.4.1.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "numpy>=2,<3"
       # One install links all workspaces (packages + apps).
       - run: npm ci
       # Deterministic suite: packages + agent-builder + chief-of-staff +

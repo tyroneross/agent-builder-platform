@@ -18,12 +18,12 @@ import { CalendarCheck, Download, Upload } from "lucide-react";
 import CascadeTimeline, { NODE_ORDER } from "./components/CascadeTimeline";
 import CloudControls from "./components/CloudControls";
 import TelemetryPanel from "./components/TelemetryPanel";
-import { describeScheduleInput, normalizeScheduleInput } from "../../lib/cos-schedule-input.mjs";
+import { describeScheduleInput, normalizeScheduleInput } from "../lib/cos-schedule-input.mjs";
 import {
   buildApprovedCalendarIcs,
   calendarBlocksFromTranscript,
   calendarReviewStats,
-} from "../../lib/cos-calendar-export.mjs";
+} from "../lib/cos-calendar-export.mjs";
 
 const EMPTY_NODE = { status: "pending" };
 

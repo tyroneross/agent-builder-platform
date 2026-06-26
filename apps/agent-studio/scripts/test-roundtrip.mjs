@@ -658,24 +658,19 @@ async function main() {
   }
   ok(`disk round-trip: write to disk → read back → reimport preserves node/edge counts`);
 
-  // agent-builder validateSpec — best-effort. The studio inlines an
-  // identical implementation; this assertion checks the sibling file
-  // hasn't drifted in a way that would break consumers.
-  try {
-    const agentBuilderUrl = new URL("../../agent-builder/lib/generator.js", import.meta.url);
-    const ab = await import(agentBuilderUrl.href);
-    if (typeof ab.validateSpec !== "function") {
-      console.log("SKIP agent-builder validateSpec import: function not exported");
-    } else {
-      const errs = ab.validateSpec(exported.spec);
-      if (errs.length) {
-        fail(`agent-builder validateSpec rejected exported spec: ${errs.join("; ")}`);
-      }
-      ok(`agent-builder validateSpec accepts the exported spec`);
-    }
-  } catch (err) {
-    console.log(`SKIP agent-builder validateSpec import: ${err?.message || err}`);
+  // The packaging engine must accept the studio-exported spec. Validate against
+  // @tyroneross/agent-pack's validateSpec (the canonical agent-spec validator the
+  // packager uses) — a firm, guaranteed assertion now that the engine is a shared
+  // workspace package (was a best-effort import of agent-builder/lib pre-merge).
+  const { validateSpec: packValidateSpec } = await import("@tyroneross/agent-pack");
+  if (typeof packValidateSpec !== "function") {
+    fail("agent-pack does not export validateSpec");
   }
+  const packErrs = packValidateSpec(exported.spec);
+  if (packErrs.length) {
+    fail(`agent-pack validateSpec rejected exported spec: ${packErrs.join("; ")}`);
+  }
+  ok(`agent-pack validateSpec accepts the exported spec`);
 
   // Cleanup tmp.
   await fs.rm(tmpRoot, { recursive: true, force: true });

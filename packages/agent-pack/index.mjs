@@ -36,3 +36,12 @@ export {
   detectRiskSurfaces,
   detectDocProducer,
 } from "./src/emitted-capabilities/index.mjs";
+
+// Canonical canvas seed patterns (the starting graphs a host drops on the
+// canvas). Bound to the governance PATTERNS by test/pattern-consistency.test.mjs.
+export {
+  CANVAS_PATTERNS,
+  SOLO_TOOL_AGENT_PATTERN_ID,
+  findCanvasPattern,
+  canvasFromPattern,
+} from "./src/canvas-seeds.mjs";

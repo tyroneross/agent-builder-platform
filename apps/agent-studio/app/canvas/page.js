@@ -45,6 +45,7 @@ import {
 } from "../lib/markdown-export.mjs";
 import {
   exportProjectToSpec,
+  exportProjectToFullPackage,
   importSpecToProject,
 } from "../lib/spec-export.mjs";
 import {
@@ -1349,6 +1350,60 @@ export default function StudioCanvas() {
     }
   }
 
+  // Export the COMPLETE installable package (~34-40 files) via @tyroneross/
+  // agent-pack, then stage it (git-ignored .artifacts/) through /api/artifacts.
+  // Offers an immediate Promote to a standalone live folder. Authored node
+  // governance (permission/tools) flows into the package.
+  async function exportFullPackage() {
+    if (!liveProject) return;
+    if (!liveProject.workingFolder || !liveProject.workingFolder.startsWith("/")) {
+      window.alert("Set the project's working folder before exporting a package.");
+      return;
+    }
+    let bundle;
+    try {
+      bundle = exportProjectToFullPackage(liveProject);
+    } catch (err) {
+      window.alert(`Export failed: ${err?.message || "spec validation error"}`);
+      return;
+    }
+    try {
+      const res = await fetch("/api/artifacts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "stage",
+          workingFolder: liveProject.workingFolder,
+          name: liveProject.name,
+          files: bundle.files,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) {
+        window.alert(`Export failed: ${json.error || res.status}`);
+        return;
+      }
+      const entry = json.entry;
+      const promote = window.confirm(
+        `Staged ${entry.fileCount}-file package at:\n${entry.dir}\n\nPromote it to a standalone live folder now?`,
+      );
+      if (!promote) return;
+      const pres = await fetch("/api/artifacts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "promote", workingFolder: liveProject.workingFolder, id: entry.id }),
+      });
+      const pjson = await pres.json();
+      if (!pres.ok || !pjson.ok) {
+        window.alert(`Promote failed: ${pjson.error || pres.status}`);
+        return;
+      }
+      window.alert(`Promoted to:\n${pjson.entry.promotedTo}`);
+    } catch (err) {
+      window.alert(`Export failed: ${err?.message || "network error"}`);
+    }
+  }
+
   // Pass 17 — Import agent spec. Prompts the user for an absolute path to
   // a `<workingFolder>/spec/` directory, reads the 10 files via
   // /api/fs/read-spec, and creates a new project from the imported spec.
@@ -1787,6 +1842,14 @@ export default function StudioCanvas() {
             data-canvas-export-spec
           >
             export spec
+          </button>
+          <button
+            className="tool-btn"
+            onClick={exportFullPackage}
+            title="Build the full installable package via agent-pack, stage it, and optionally promote to a standalone folder"
+            data-canvas-export-package
+          >
+            export package
           </button>
           <button
             className="tool-btn"

@@ -83,6 +83,8 @@ const PERMISSION_OPTIONS = [
   "allow-write",
 ];
 const SIDE_EFFECT_OPTIONS = ["none", "read", "network", "write", "shell", "destructive"];
+// Project-level validation profile — scales the packager's required contracts.
+const PROFILE_OPTIONS = ["skill", "personal", "team", "enterprise"];
 const SIDE_EFFECT_TIER = {
   none: "T0",
   read: "T1",
@@ -707,6 +709,15 @@ export default function StudioCanvas() {
   function handleRenameProject(projectId, name) {
     setStore((prev) => {
       const next = withProjectUpdated(prev, projectId, (p) => ({ ...p, name }));
+      writeStore(next);
+      return next;
+    });
+  }
+
+  // v7 — project validation profile (governance scope for the packager).
+  function handleSetValidationProfile(projectId, validationProfile) {
+    setStore((prev) => {
+      const next = withProjectUpdated(prev, projectId, (p) => ({ ...p, validationProfile }));
       writeStore(next);
       return next;
     });
@@ -1851,6 +1862,22 @@ export default function StudioCanvas() {
           >
             export package
           </button>
+          {liveProject && (
+            <select
+              className="tool-btn"
+              value={liveProject.validationProfile ?? "personal"}
+              disabled={locked}
+              onChange={(e) => handleSetValidationProfile(liveProject.id, e.target.value)}
+              title="Validation profile — scales the packaged agent's required governance contracts"
+              data-canvas-validation-profile
+            >
+              {PROFILE_OPTIONS.map((p) => (
+                <option key={p} value={p}>
+                  profile: {p}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             className="tool-btn"
             onClick={importSpec}

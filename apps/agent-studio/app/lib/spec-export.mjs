@@ -20,6 +20,7 @@ import { getEffectiveRoleTemplate, HARD_RULES } from "./role-templates.mjs";
 // hand-copy explicitly anticipated. Re-exported below under the studio's
 // historical names (slugifySpec) for back-compat with existing importers.
 import { slugify as slugifySpec, toYaml, validateSpec, canonicalRole, lintRoles } from "@tyroneross/agent-spec";
+import { buildAgentArtifacts } from "@tyroneross/agent-pack";
 
 export { slugifySpec, toYaml, validateSpec };
 
@@ -136,10 +137,12 @@ function projectToSpec(project) {
       kind: canonicalRole(n.role),
       description: n.description ?? "",
       instructions: typeof n.instructions === "string" ? n.instructions : "",
-      tools: [],
+      // v7 — authored node governance flows to the spec (was a constant). Empty
+      // defaults match the prior constants, so existing seeds round-trip identically.
+      tools: Array.isArray(n.tools) ? n.tools.map((t) => ({ ...t })) : [],
       inputs: Array.isArray(n.inputs) ? n.inputs.slice() : [],
       outputs: Array.isArray(n.outputs) ? n.outputs.slice() : [],
-      permission: "ask-first",
+      permission: typeof n.permission === "string" && n.permission ? n.permission : "ask-first",
       model: "inherit",
     };
     // Pass 18 — subagent reference is portable. The decision (Q5) was
@@ -545,6 +548,28 @@ function readGoldenTasks(files) {
   } catch {
     return [];
   }
+}
+
+// Full-package export — build the complete installable agent package (~34
+// files: agent.yaml, manifest.json, tools.json, system-prompt.md, setup/,
+// runtime adapters, evals/, memory/, contracts/) from the canonical spec, using
+// the shared @tyroneross/agent-pack engine. This is the "Export full package"
+// path; exportProjectToSpec stays the lightweight 10-file portable subset.
+// Returns { spec, files: [{ path, content }], manifest } from the engine.
+export function exportProjectToFullPackage(project, options = {}) {
+  if (!project || typeof project !== "object") {
+    throw new Error("exportProjectToFullPackage: project required");
+  }
+  const spec = projectToSpec(project);
+  const errors = validateSpec(spec);
+  if (errors.length) {
+    const err = new Error(`spec validation failed: ${errors.join("; ")}`);
+    err.code = "SPEC_INVALID";
+    err.errors = errors;
+    throw err;
+  }
+  const out = buildAgentArtifacts(spec, options);
+  return { spec, ...out };
 }
 
 // Public entrypoint — re-hydrate a v5 project from an exported spec. Studio-

@@ -1,9 +1,11 @@
 // Project storage layer. Owns the on-disk shape, migrations, and the helpers
 // the canvas + landing page use to read/write projects. Pure module — no React.
 //
-// Storage shape (v6 — Pass 14.5):
+// Storage shape (v7 — adds first-class governance: node tools/permission +
+// project memory/validationProfile, so the canonical spec carries real values
+// instead of export-time constants):
 //   {
-//     version: 6,
+//     version: 7,
 //     activeProjectId: string,
 //     projects: [
 //       {
@@ -44,10 +46,10 @@
 //     ]
 //   }
 //
-// Migration chain: v1 → v6 (structural), v2 → v6, v3 → v6, v4 → v6, v5 → v6
-// (additive: status="draft" + snapshots=[] per project). v5 key retained for
-// recovery (existing pattern). All lazy on first load and persisted to v6
-// immediately on first write.
+// Migration chain: v1…v6 → v7. v6 → v7 is additive (node tools/permission +
+// project memory/validationProfile, all default-filled by the normalizers).
+// Legacy keys retained for recovery. The CURRENT version/key live in a single
+// constant (STORAGE_VERSION/STORAGE_KEY) — the next bump is one line, not ~10.
 //
 // Pass 9: SEED_NODES / SEED_EDGES are now re-exported from agent-patterns.js
 // (the Solo Tool Agent pattern). The pattern library is the single source of
@@ -71,10 +73,19 @@ export const STORAGE_KEY_V3 = "agent-studio:v3";
 export const STORAGE_KEY_V4 = "agent-studio:v4";
 export const STORAGE_KEY_V5 = "agent-studio:v5";
 export const STORAGE_KEY_V6 = "agent-studio:v6";
+export const STORAGE_KEY_V7 = "agent-studio:v7";
 export const STORAGE_VERSION_V3 = 3;
 export const STORAGE_VERSION_V4 = 4;
 export const STORAGE_VERSION_V5 = 5;
 export const STORAGE_VERSION_V6 = 6;
+export const STORAGE_VERSION_V7 = 7;
+
+// Single source for the CURRENT canonical store version + key. Earlier passes
+// hardcoded the version envelope in ~10 places; the current version lives here
+// and everything reads it, so the next bump is one line. Legacy keys above are
+// kept for migration reads only.
+export const STORAGE_VERSION = STORAGE_VERSION_V7;
+export const STORAGE_KEY = STORAGE_KEY_V7;
 
 // Pass 14.6 — read snapshot cap from storage-config. Falls back to the
 // frozen default when the runtime hasn't loaded localStorage yet (server
@@ -122,6 +133,8 @@ export function makeProject({
   runCache = {},
   status = "draft",
   snapshots = [],
+  memory = {},
+  validationProfile = "personal",
   canvas,
 } = {}) {
   return {
@@ -137,7 +150,14 @@ export function makeProject({
     runCache: { ...runCache },
     status: status === "completed" ? "completed" : "draft",
     snapshots: Array.isArray(snapshots) ? snapshots.slice() : [],
-    canvas: canvas || seedCanvas(),
+    // v7 — project-level governance: `memory` substrate config (working/session/
+    // persistent) and `validationProfile` (skill | personal | team | enterprise)
+    // that scales the packager's required contracts.
+    memory: memory && typeof memory === "object" ? { ...memory } : {},
+    validationProfile: typeof validationProfile === "string" ? validationProfile : "personal",
+    // Normalize so a fresh project is fully canonical — every node carries the
+    // governance fields (tools/permission), not just projects read from storage.
+    canvas: normalizeCanvas(canvas || seedCanvas()),
   };
 }
 
@@ -168,7 +188,7 @@ function normalizeRolePromptOverrides(overrides) {
 //   `source` is studio-only ("manual" | "upstream-cache").
 // - `mockOutput` (Pass 14, studio-only): any | null. Used by Pass 15; in Pass
 //   14 we just reserve the field so the v5 shape doesn't change again.
-function normalizeNode(n) {
+export function normalizeNode(n) {
   if (!n || typeof n !== "object") return n;
   const out = { ...n };
   if (typeof out.instructions !== "string") out.instructions = "";
@@ -194,6 +214,14 @@ function normalizeNode(n) {
   if (typeof out.subagentProjectId !== "string") {
     out.subagentProjectId = null;
   }
+  // v7 — governance fields, first-class on the node (were stubbed at export
+  // before). `tools`: array of { name, responsibility?, sideEffect?, permission? }
+  // bound to this node; the packager derives T0–T5 tiers from sideEffect.
+  // `permission`: the node's own gate (allow-read | ask-first | deny-by-default |
+  // approval-required | allow-write). Authoring UX lands later; reserving the
+  // fields here lets the canonical spec carry real values instead of constants.
+  out.tools = Array.isArray(out.tools) ? out.tools.filter((t) => t && typeof t === "object") : [];
+  out.permission = typeof out.permission === "string" && out.permission ? out.permission : "ask-first";
   return out;
 }
 
@@ -286,7 +314,7 @@ function normalizeSnapshots(snapshots) {
   return cleaned;
 }
 
-function normalizeProject(p) {
+export function normalizeProject(p) {
   return {
     id: p.id,
     name: p.name,
@@ -300,6 +328,11 @@ function normalizeProject(p) {
     runCache: normalizeRunCache(p.runCache),
     status: p.status === "completed" ? "completed" : "draft",
     snapshots: normalizeSnapshots(p.snapshots),
+    memory: p.memory && typeof p.memory === "object" ? p.memory : {},
+    validationProfile:
+      typeof p.validationProfile === "string" && p.validationProfile
+        ? p.validationProfile
+        : "personal",
     canvas: normalizeCanvas(p.canvas),
   };
 }
@@ -311,17 +344,33 @@ function normalizeProject(p) {
 export function loadStore() {
   if (typeof window === "undefined") return null;
 
-  // Prefer v6 if present.
+  // Prefer the current version (v7) if present.
+  try {
+    const rawCurrent = window.localStorage.getItem(STORAGE_KEY);
+    if (rawCurrent) {
+      const parsed = JSON.parse(rawCurrent);
+      if (parsed && parsed.version === STORAGE_VERSION && Array.isArray(parsed.projects)) {
+        return hydrateStore(parsed);
+      }
+    }
+  } catch (err) {
+    console.warn("[agent-studio] failed to read current store:", err);
+  }
+
+  // v6 → v7: additive (node tools/permission + project memory/validationProfile).
+  // normalizeProject fills the new defaults during hydration; persist forward.
   try {
     const rawV6 = window.localStorage.getItem(STORAGE_KEY_V6);
     if (rawV6) {
       const parsed = JSON.parse(rawV6);
       if (parsed && parsed.version === STORAGE_VERSION_V6 && Array.isArray(parsed.projects)) {
-        return hydrateStore(parsed);
+        const hydrated = hydrateStore(parsed);
+        writeStore(hydrated);
+        return hydrated;
       }
     }
   } catch (err) {
-    console.warn("[agent-studio] failed to read v6 store:", err);
+    console.warn("[agent-studio] failed to migrate v6 store:", err);
   }
 
   // v5 → v6: copy forward, default status="draft" + snapshots=[] per project.
@@ -333,7 +382,7 @@ export function loadStore() {
       const v5 = JSON.parse(rawV5);
       if (v5 && v5.version === STORAGE_VERSION_V5 && Array.isArray(v5.projects)) {
         const upgraded = {
-          version: STORAGE_VERSION_V6,
+          version: STORAGE_VERSION,
           activeProjectId: v5.activeProjectId,
           projects: v5.projects.map((p) => ({
             ...p,
@@ -357,7 +406,7 @@ export function loadStore() {
       const v4 = JSON.parse(rawV4);
       if (v4 && v4.version === STORAGE_VERSION_V4 && Array.isArray(v4.projects)) {
         const upgraded = {
-          version: STORAGE_VERSION_V6,
+          version: STORAGE_VERSION,
           activeProjectId: v4.activeProjectId,
           projects: v4.projects.map((p) => ({
             ...p,
@@ -382,7 +431,7 @@ export function loadStore() {
       const v3 = JSON.parse(rawV3);
       if (v3 && v3.version === STORAGE_VERSION_V3 && Array.isArray(v3.projects)) {
         const upgraded = {
-          version: STORAGE_VERSION_V6,
+          version: STORAGE_VERSION,
           activeProjectId: v3.activeProjectId,
           projects: v3.projects.map((p) => ({
             ...p,
@@ -408,7 +457,7 @@ export function loadStore() {
       const v2 = JSON.parse(rawV2);
       if (v2 && v2.version === 2 && Array.isArray(v2.projects)) {
         const upgraded = {
-          version: STORAGE_VERSION_V6,
+          version: STORAGE_VERSION,
           activeProjectId: v2.activeProjectId,
           projects: v2.projects.map((p) => ({
             ...p,
@@ -445,7 +494,7 @@ export function loadStore() {
         });
         const project = makeProject({ name: "Default", workingFolder: "", canvas });
         const store = {
-          version: STORAGE_VERSION_V6,
+          version: STORAGE_VERSION,
           activeProjectId: project.id,
           projects: [project],
         };
@@ -469,7 +518,7 @@ function hydrateStore(parsed) {
 
   if (projects.length === 0) {
     return {
-      version: STORAGE_VERSION_V6,
+      version: STORAGE_VERSION,
       activeProjectId: null,
       projects: [],
     };
@@ -480,7 +529,7 @@ function hydrateStore(parsed) {
     : projects[0].id;
 
   return {
-    version: STORAGE_VERSION_V6,
+    version: STORAGE_VERSION,
     activeProjectId: activeId,
     projects,
   };
@@ -490,20 +539,20 @@ export function writeStore(store) {
   if (typeof window === "undefined") return;
   try {
     const payload = {
-      version: STORAGE_VERSION_V6,
+      version: STORAGE_VERSION,
       activeProjectId: store.activeProjectId,
       projects: store.projects,
     };
-    window.localStorage.setItem(STORAGE_KEY_V6, JSON.stringify(payload));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch (err) {
-    console.warn("[agent-studio] failed to persist v6 store:", err);
+    console.warn("[agent-studio] failed to persist store:", err);
   }
 }
 
 export function clearStore() {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem(STORAGE_KEY_V6);
+    window.localStorage.removeItem(STORAGE_KEY);
   } catch (err) {
     console.warn("[agent-studio] failed to clear v6 store:", err);
   }
@@ -514,7 +563,7 @@ export function clearStore() {
 // but guards by redirecting in that case.
 export function emptyStore() {
   return {
-    version: STORAGE_VERSION_V6,
+    version: STORAGE_VERSION,
     activeProjectId: null,
     projects: [],
   };

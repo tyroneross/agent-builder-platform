@@ -19,7 +19,7 @@ import {
   classifyInvestmentFile,
   extractPrintableText,
   summarizeMaterialSignals,
-} from "../../lib/investment-materials.mjs";
+} from "../lib/investment-materials.mjs";
 
 const SAMPLE_REVIEW = {
   company: "Irys Legal AI",

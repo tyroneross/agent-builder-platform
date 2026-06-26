@@ -409,7 +409,7 @@ export default function Home() {
             <Play size={16} />
             Run Chief of Staff
           </a>
-          <a className="ghost-button" href="/investments">
+          <a className="ghost-button" href="http://localhost:3033">
             <ListChecks size={16} />
             Review Investment
           </a>
